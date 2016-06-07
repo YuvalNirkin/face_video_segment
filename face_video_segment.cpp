@@ -73,7 +73,7 @@ int main(int argc, char* argv[])
 
 	try
 	{
-		segmentation::FaceView viewer(inputPath, segPath, landmarksModelPath);
+		segmentation::FaceView viewer(inputPath, segPath, landmarksModelPath, outputPath);
 		viewer.run();
 	}
 	catch (std::exception& e)

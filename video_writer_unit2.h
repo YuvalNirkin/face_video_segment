@@ -26,32 +26,46 @@
 //
 // ---
 
-#include <opencv2/core.hpp>
-#include <opencv2/highgui.hpp>
+#ifndef FACE_VIDEO_SEGMENT_VIDEO_WRITER_UNIT_2_H__
+#define FACE_VIDEO_SEGMENT_VIDEO_WRITER_UNIT_2_H__
 
-#include <base/base_impl.h>
-#include <segment_util/segmentation_io.h>
-#include <segment_util/segmentation_util.h>
-#include <segment_util/segmentation_render.h>
+#include "base/base.h"
+#include "video_framework/video_unit.h"
 
-namespace segmentation
-{
+#include <opencv2/videoio.hpp>
 
-	class FaceView
-	{
-	public:
-		FaceView(const std::string& video_file, const std::string& seg_file,
-			const std::string& landmarks_model_file, const std::string& output_path = "");
+namespace segmentation {
 
-		void run();
-
-	private:
-		void run_serial();
-		void run_parallel();
-
-	private:
-		std::string m_video_file, m_seg_file;
-		std::string m_landmarks_model_file;
-		std::string m_output_path;
+	struct VideoWriter2Options {
+		std::string video_stream_name = "VideoStream";
+		std::string segment_stream_name = "SegmentationStream";
+		std::string landmarks_model_file = "";
+		float output_scale = 1.0f;
 	};
-}
+
+	class VideoWriterUnit2 : public video_framework::VideoUnit {
+	public:
+	public:
+		VideoWriterUnit2(const VideoWriter2Options& options,
+			const std::string& video_file);
+		~VideoWriterUnit2();
+
+		VideoWriterUnit2(const VideoWriterUnit2&) = delete;
+		VideoWriterUnit2& operator=(const VideoWriterUnit2&) = delete;
+
+		virtual bool OpenStreams(video_framework::StreamSet* set);
+		virtual void ProcessFrame(video_framework::FrameSetPtr input, std::list<video_framework::FrameSetPtr>* output);
+		virtual bool PostProcess(std::list<video_framework::FrameSetPtr>* append);
+
+	private:
+		VideoWriter2Options options_;
+		std::string video_file_;
+
+		int video_stream_idx_;
+
+		cv::VideoWriter writer_;
+	};
+
+}  // namespace segmentation
+
+#endif  // FACE_VIDEO_SEGMENT_VIDEO_WRITER_UNIT_2_H__

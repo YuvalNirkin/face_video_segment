@@ -27,6 +27,7 @@
 // ---
 
 #include "landmarks_unit.h"
+#include "face_segmentation_unit.h"
 
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
@@ -40,7 +41,7 @@
 #include <dlib/opencv.h>
 #include <dlib/image_processing/frontal_face_detector.h>
 #include <dlib/image_processing/shape_predictor.h>
-
+/*
 // boost geometry
 #include <boost/geometry/geometries/point_xy.hpp>
 #include <boost/geometry/geometries/polygon.hpp>
@@ -50,6 +51,7 @@
 #include <boost/geometry/algorithms/correct.hpp>
 #include <boost/geometry/algorithms/intersection.hpp>
 #include <boost/geometry/strategies/strategies.hpp>	// important
+*/
 
 using namespace video_framework;
 namespace bg = boost::geometry;
@@ -77,10 +79,6 @@ namespace segmentation
 	private:
 		dlib::rectangle& selectMainFace(const cv::Mat& img, std::vector<dlib::rectangle>& faces);
 		void renderLandmarks(cv::Mat& img, const dlib::full_object_detection& landmarks,
-			const cv::Scalar& color = cv::Scalar(0, 255, 0));
-		void createRing(const VectorMesh& mesh, const SegmentationDesc_Polygon& poly, ring_t& ring);
-		void renderMultiPolygon(cv::Mat& img, const mpoly_t& mpoly);
-		void renderRing(cv::Mat& img, const ring_t& ring, 
 			const cv::Scalar& color = cv::Scalar(0, 255, 0));
 
 	private:
@@ -161,8 +159,8 @@ namespace segmentation
 		os << "LandmarksUnit_" << display_unit_id_;
 		window_name_ = os.str();
 
-		cv::namedWindow(window_name_);
-		cv::waitKey(10);
+		//cv::namedWindow(window_name_);
+		//cv::waitKey(10);
 		return true;
 	}
 
@@ -203,117 +201,27 @@ namespace segmentation
 				landmarks_ring->push_back(
 				{ (float)landmarks.part(i).x(), (float)landmarks.part(i).y() });
 			}
-			
-			
-
-			// Create face ring
-			cv::Point2f p19((float)landmarks.part(19).x(), (float)landmarks.part(19).y());
-			cv::Point2f p21((float)landmarks.part(21).x(), (float)landmarks.part(21).y());
-			cv::Point2f p22((float)landmarks.part(22).x(), (float)landmarks.part(22).y());
-			cv::Point2f p24((float)landmarks.part(24).x(), (float)landmarks.part(24).y());
-			cv::Point2f p27((float)landmarks.part(27).x(), (float)landmarks.part(27).y());
-			cv::Point2f p34((float)landmarks.part(34).x(), (float)landmarks.part(34).y());
-			cv::Point2f pmid = (p21 + p22) * 0.5f;
-			cv::Point2f dir = (p27 - p34);
-			//cv::Point2f ptop = pmid + (p27 - p34);
-			cv::Point2f ptop_l = p19 + dir;
-			cv::Point2f ptop_r = p24 + dir;
-			ring_t face{ 
-				{ (float)landmarks.part(0).x(), (float)landmarks.part(0).y() },
-				{ (float)landmarks.part(1).x(), (float)landmarks.part(1).y() },
-				{ (float)landmarks.part(2).x(), (float)landmarks.part(2).y() },
-				{ (float)landmarks.part(3).x(), (float)landmarks.part(3).y() },
-				{ (float)landmarks.part(4).x(), (float)landmarks.part(4).y() },
-				{ (float)landmarks.part(5).x(), (float)landmarks.part(5).y() },
-				{ (float)landmarks.part(6).x(), (float)landmarks.part(6).y() },
-				{ (float)landmarks.part(7).x(), (float)landmarks.part(7).y() },
-				{ (float)landmarks.part(8).x(), (float)landmarks.part(8).y() },
-				{ (float)landmarks.part(9).x(), (float)landmarks.part(9).y() },
-				{ (float)landmarks.part(10).x(), (float)landmarks.part(10).y() },
-				{ (float)landmarks.part(11).x(), (float)landmarks.part(11).y() },
-				{ (float)landmarks.part(12).x(), (float)landmarks.part(12).y() },
-				{ (float)landmarks.part(13).x(), (float)landmarks.part(13).y() },
-				{ (float)landmarks.part(14).x(), (float)landmarks.part(14).y() },
-				{ (float)landmarks.part(15).x(), (float)landmarks.part(15).y() },
-				{ (float)landmarks.part(16).x(), (float)landmarks.part(16).y() },
-				{ (float)landmarks.part(26).x(), (float)landmarks.part(26).y() },
-				{ ptop_r.x, ptop_r.y },
-				{ ptop_l.x, ptop_l.y },
-				{ (float)landmarks.part(17).x(), (float)landmarks.part(17).y() },
-				{ (float)landmarks.part(0).x(), (float)landmarks.part(0).y() }
-			};
-			bg::correct(face);
-
-			renderLandmarks(image, landmarks);
-			renderRing(image, face, cv::Scalar(0, 0, 255));
-
-			// For each region
-			const VectorMesh& mesh = desc.vector_mesh();
-			for (const auto& r : desc.region())
-			{
-				if (r.vectorization().polygon().empty()) continue;
-				mpoly_t mpoly;
-
-				// For each polygon
-				for (const auto& poly : r.vectorization().polygon())
-				{
-					if (poly.coord_idx_size() == 0) continue;
-					if (poly.hole())
-					{
-						ring_t ring;
-						createRing(mesh, poly, ring);
-
-						// For each polygon already added to the multipolygon 
-						// (assumes that all holes come after the outer polygons)
-						for (poly_t& bpoly : mpoly)
-						{
-							if (bg::covered_by(ring, bpoly))
-							{
-								bpoly.inners().push_back(ring);
-								break;
-							}
-						}
-					}
-					else
-					{
-						mpoly.resize(mpoly.size() + 1);
-						createRing(mesh, poly, mpoly.back().outer());
-					}
-				}
-
-				// Calculate intersection area ratio
-				mpoly_t out;
-				bg::intersection(face, mpoly, out);
-				double ratio = (bg::area(out) / bg::area(mpoly));
-				std::cout << "ratio = " << ratio << std::endl;
-				const double t = 0.5;
-
-
-				//if(ratio > t) renderMultiPolygon(image, mpoly);
-				//cv::imshow(window_name_.c_str(), image);
-				//cv::waitKey(1);
-			}
 		}
-
+		/*
 		if (frame_buffer_) {
 			cv::resize(image, *frame_buffer_, frame_buffer_->size());
 			cv::imshow(window_name_.c_str(), *frame_buffer_);
 		}
 		else {
 			cv::imshow(window_name_.c_str(), image);
-		}
+		}*/
 
 		// Forward input
 		input->push_back(std::shared_ptr<PointerFrame<ring_t>>(
 			new PointerFrame<ring_t>(std::move(landmarks_ring))));
 
 		output->push_back(input);
-		cv::waitKey(1);
+		//cv::waitKey(1);
 	}
 
 	bool LandmarksUnitImpl::PostProcess(list<FrameSetPtr>* append)
 	{
-		cv::destroyWindow(window_name_);
+		//cv::destroyWindow(window_name_);
 		return false;
 	}
 
@@ -396,48 +304,6 @@ namespace segmentation
 		for (unsigned long i = 0; i < 68; ++i)
 			cv::putText(img, std::to_string(i), cv::Point(d.part(i).x(), d.part(i).y()),
 				cv::FONT_HERSHEY_PLAIN, 0.5, color, 1.0);
-	}
-
-	void LandmarksUnitImpl::createRing(const VectorMesh& mesh,
-		const SegmentationDesc_Polygon& poly, ring_t& ring)
-	{
-		// For each coordinate
-		ring.resize(poly.coord_idx_size() - 1);
-		for (int c = 0; c < ring.size(); ++c)
-		{
-			int idx = poly.coord_idx(c);
-			ring[c] = point_t(mesh.coord(idx), mesh.coord(idx + 1));
-		}
-
-		bg::correct(ring);
-	}
-
-	void LandmarksUnitImpl::renderMultiPolygon(cv::Mat& img, const mpoly_t& mpoly)
-	{
-		cv::Scalar color = cv::Scalar(rng.uniform(0, 255), rng.uniform(0, 255), rng.uniform(0, 255));
-		//cv::Scalar color(0, 255, 0);
-		for (const poly_t& poly : mpoly)
-		{
-			renderRing(img, poly.outer(), color);
-			for(const ring_t ring : poly.inners())
-				renderRing(img, poly.outer(), color);
-		}
-	}
-
-	void LandmarksUnitImpl::renderRing(cv::Mat& img, const ring_t& ring, 
-		const cv::Scalar& color)
-	{
-		if (ring.empty()) return;
-
-		cv::putText(img, std::to_string(0), cv::Point(ring[0].x(), ring[0].y()),
-			cv::FONT_HERSHEY_PLAIN, 0.5, color, 1.0);
-		for (int c = 1; c < ring.size(); ++c)
-		{
-			cv::line(img, cv::Point(ring[c].x(), ring[c].y()),
-				cv::Point(ring[c - 1].x(), ring[c - 1].y()), color);
-			cv::putText(img, std::to_string(c), cv::Point(ring[c].x(), ring[c].y()),
-				cv::FONT_HERSHEY_PLAIN, 0.5, color, 1.0);
-		}
 	}
 
 }  // namespace video_framework.

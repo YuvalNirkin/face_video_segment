@@ -31,6 +31,7 @@
 
 #include "base/base.h"
 #include "video_framework/video_unit.h"
+#include "segment_util/segmentation_util.h"
 
 // boost geometry
 #include <boost/geometry/geometries/point_xy.hpp>
@@ -40,6 +41,8 @@
 #include <boost/geometry/algorithms/covered_by.hpp>
 #include <boost/geometry/algorithms/correct.hpp>
 #include <boost/geometry/algorithms/intersection.hpp>
+#include <boost/geometry/algorithms/union.hpp>
+#include <boost/geometry/algorithms/is_valid.hpp>
 #include <boost/geometry/strategies/strategies.hpp>	// important
 
 namespace bg = boost::geometry;
@@ -53,6 +56,7 @@ namespace segmentation
 
 	struct FaceSegmentationOptions {
 		std::string stream_name = "FaceSegmentationStream";
+		std::string video_stream_name = "VideoStream";
 		std::string landmarks_stream_name = "LandmarksStream";
 		std::string segment_stream_name = "SegmentationStream";
 	};
@@ -72,16 +76,62 @@ namespace segmentation
 
 	private:
 		void createRing(const VectorMesh& mesh, const SegmentationDesc_Polygon& poly, ring_t& ring);
-		/*
-		void renderMultiPolygon(cv::Mat& img, const mpoly_t& mpoly);
+		
+		void renderMultiPolygon(cv::Mat& img, const mpoly_t& mpoly,
+			const cv::Scalar& color = cv::Scalar(0, 255, 0));
 		void renderRing(cv::Mat& img, const ring_t& ring,
 			const cv::Scalar& color = cv::Scalar(0, 255, 0));
-			*/
+			
+		void geometricFaceSeg(const ring_t& landmarks, const SegmentationDesc& seg_desc,
+			std::vector<int>& output_ids);
+
+		void rasterFaceSeg(const ring_t& landmarks, const SegmentationDesc& seg_desc,
+			std::vector<int>& output_ids);
+
 
 	private:
 		FaceSegmentationOptions options_;
+		int video_stream_idx_;
 		int landmarks_stream_idx_;
 		int seg_stream_idx_;
+
+		int frame_width_;
+		int frame_height_;
+	};
+
+	struct FaceSegmentationRendererOptions {
+		std::string stream_name = "FaceSegmentationRendererStream";
+		std::string video_stream_name = "VideoStream";
+		std::string face_segment_stream_name = "FaceSegmentationStream";
+		std::string segment_stream_name = "SegmentationStream";
+	};
+
+	class FaceSegmentationRendererUnit : public video_framework::VideoUnit
+	{
+	public:
+		FaceSegmentationRendererUnit(const FaceSegmentationRendererOptions& options);
+		~FaceSegmentationRendererUnit();
+
+		FaceSegmentationRendererUnit(const FaceSegmentationRendererUnit&) = delete;
+		FaceSegmentationRendererUnit& operator=(const FaceSegmentationRendererUnit&) = delete;
+
+		virtual bool OpenStreams(video_framework::StreamSet* set);
+		virtual void ProcessFrame(video_framework::FrameSetPtr input, std::list<video_framework::FrameSetPtr>* output);
+		virtual bool PostProcess(std::list<video_framework::FrameSetPtr>* append);
+
+	private:
+		void renderSelectedRegions(cv::Mat& img, const SegmentationDesc& seg_desc, 
+			const std::vector<int>& region_ids, const cv::Scalar& color = cv::Scalar(0, 0, 255));
+
+	private:
+		FaceSegmentationRendererOptions options_;
+		int video_stream_idx_;
+		int face_seg_stream_idx_;
+		int seg_stream_idx_;
+		int display_unit_id_;
+		std::string window_name_;
+
+		static int display_unit_count;
 	};
 
 }  // namespace segmentation
