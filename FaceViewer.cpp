@@ -51,7 +51,8 @@ namespace segmentation
 	void FaceView::run()
 	{
 		//run_serial();
-		run_parallel();
+		//run_parallel();
+		test();
 	}
 
 	void FaceView::run_serial()
@@ -203,5 +204,43 @@ namespace segmentation
 		invoker.WaitUntilPipelineFinished();
 
 		LOG(INFO) << "__FACE_SEGMENTATION_FINISHED__";
+	}
+
+	void FaceView::test()
+	{
+		// Video Reader Unit
+		VideoReaderUnit reader(VideoReaderOptions(), m_video_file);
+
+		// Segmentation Reader Unit
+		SegmentationReaderUnitOptions segOptions;
+		segOptions.filename = m_seg_file;
+		SegmentationReaderUnit segReader(segOptions);
+		segReader.AttachTo(&reader);
+
+		// Segmentation Renderer Unit
+		SegmentationRenderUnitOptions seg_render_options;
+		seg_render_options.blend_alpha = 0.4f;
+		seg_render_options.hierarchy_level = 0.1f;
+		SegmentationRenderUnit seg_render(seg_render_options);
+		seg_render.AttachTo(&segReader);
+		
+		// Video Display Unit
+		VideoDisplayOptions video_display_options;
+		video_display_options.stream_name = "RenderedRegionStream";
+		VideoDisplayUnit display(video_display_options);
+		display.AttachTo(&seg_render);
+
+		// Prepare processing
+		if (!reader.PrepareProcessing())
+			throw std::runtime_error("Video framework setup failed.");
+
+		// Run with rate limitation.
+		RatePolicy rate_policy;
+		// Speed up playback for fun :)
+		rate_policy.max_rate = 45;
+
+		// This call will block and return when the whole has been displayed.
+		if (!reader.RunRateLimited(rate_policy))
+			throw std::runtime_error("Could not process video file.");
 	}
 }
