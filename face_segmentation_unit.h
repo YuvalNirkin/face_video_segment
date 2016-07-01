@@ -33,26 +33,8 @@
 #include "video_framework/video_unit.h"
 #include "segment_util/segmentation_util.h"
 
-// boost geometry
-#include <boost/geometry/geometries/point_xy.hpp>
-#include <boost/geometry/geometries/polygon.hpp>
-#include <boost/geometry/geometries/multi_polygon.hpp>
-#include <boost/geometry/io/io.hpp>
-#include <boost/geometry/algorithms/covered_by.hpp>
-#include <boost/geometry/algorithms/correct.hpp>
-#include <boost/geometry/algorithms/intersection.hpp>
-#include <boost/geometry/algorithms/union.hpp>
-#include <boost/geometry/algorithms/is_valid.hpp>
-#include <boost/geometry/strategies/strategies.hpp>	// important
-
-namespace bg = boost::geometry;
-
 namespace segmentation 
 {
-	typedef bg::model::d2::point_xy<float> point_t;
-	typedef bg::model::ring<point_t> ring_t;
-	typedef bg::model::polygon<point_t> poly_t;
-	typedef bg::model::multi_polygon<poly_t> mpoly_t;
 
 	struct FaceSegmentationOptions {
 		std::string stream_name = "FaceSegmentationStream";
@@ -75,17 +57,7 @@ namespace segmentation
 		virtual bool PostProcess(std::list<video_framework::FrameSetPtr>* append);
 
 	private:
-		void createRing(const VectorMesh& mesh, const SegmentationDesc_Polygon& poly, ring_t& ring);
-		
-		void renderMultiPolygon(cv::Mat& img, const mpoly_t& mpoly,
-			const cv::Scalar& color = cv::Scalar(0, 255, 0));
-		void renderRing(cv::Mat& img, const ring_t& ring,
-			const cv::Scalar& color = cv::Scalar(0, 255, 0));
-			
-		void geometricFaceSeg(const ring_t& landmarks, const SegmentationDesc& seg_desc,
-			std::vector<int>& output_ids);
-
-		void rasterFaceSeg(const ring_t& landmarks, const SegmentationDesc& seg_desc,
+		void rasterFaceSeg(const std::vector<cv::Point>& landmarks, const SegmentationDesc& seg_desc,
 			std::vector<int>& output_ids);
 
 
@@ -99,6 +71,91 @@ namespace segmentation
 		int frame_height_;
 	};
 
+	struct FaceSegGlobalOptions {
+		std::string stream_name = "FaceSegmentationStream";
+		std::string video_stream_name = "VideoStream";
+		std::string landmarks_stream_name = "LandmarksStream";
+		std::string segment_stream_name = "SegmentationStream";
+	};
+
+	struct RegionStat
+	{
+		std::vector<float> ratios;
+		std::vector<int> frame_ids;
+		float avg = 0.0f;
+		float max_ratio = 0.0f;
+	};
+
+	class FaceSegGlobalUnit : public video_framework::VideoUnit
+	{
+	public:
+		FaceSegGlobalUnit(const FaceSegGlobalOptions& options);
+		~FaceSegGlobalUnit();
+
+		FaceSegGlobalUnit(const FaceSegGlobalUnit&) = delete;
+		FaceSegGlobalUnit& operator=(const FaceSegGlobalUnit&) = delete;
+
+		virtual bool OpenStreams(video_framework::StreamSet* set);
+		virtual void ProcessFrame(video_framework::FrameSetPtr input, std::list<video_framework::FrameSetPtr>* output);
+		virtual bool PostProcess(std::list<video_framework::FrameSetPtr>* append);
+
+		std::map<int, RegionStat>& getRegionStats();
+
+	private:
+		void rasterFaceSeg(const std::vector<cv::Point>& landmarks, const SegmentationDesc& seg_desc);
+
+
+	private:
+		FaceSegGlobalOptions options_;
+		int video_stream_idx_;
+		int landmarks_stream_idx_;
+		int seg_stream_idx_;
+
+		int frame_width_;
+		int frame_height_;
+
+		std::map<int, RegionStat> region_stats_;
+
+		int frame_number_ = 0;
+		cv::Mat frame_;	// Debug
+	};
+
+	struct FaceSegLocalOptions {
+		std::string stream_name = "FaceSegLocalStream";
+		std::string video_stream_name = "VideoStream";
+		std::string segment_stream_name = "SegmentationStream";
+	};
+
+	class FaceSegLocalUnit : public video_framework::VideoUnit
+	{
+	public:
+		FaceSegLocalUnit(const FaceSegLocalOptions& options,
+			const std::map<int, RegionStat>& region_stats);
+		~FaceSegLocalUnit();
+
+		FaceSegLocalUnit(const FaceSegLocalUnit&) = delete;
+		FaceSegLocalUnit& operator=(const FaceSegLocalUnit&) = delete;
+
+		virtual bool OpenStreams(video_framework::StreamSet* set);
+		virtual void ProcessFrame(video_framework::FrameSetPtr input, std::list<video_framework::FrameSetPtr>* output);
+		virtual bool PostProcess(std::list<video_framework::FrameSetPtr>* append);
+
+	private:
+		void findFaceRegions(const SegmentationDesc& seg_desc, std::vector<int>& output_ids);
+
+	private:
+		FaceSegLocalOptions options_;
+		int video_stream_idx_;
+		int landmarks_stream_idx_;
+		int seg_stream_idx_;
+
+		int frame_width_;
+		int frame_height_;
+
+		const std::map<int, RegionStat>& region_stats_;
+		int frame_number_ = 0;
+	};
+
 	struct FaceSegmentationRendererOptions {
 		std::string stream_name = "FaceSegmentationRendererStream";
 		std::string video_stream_name = "VideoStream";
@@ -109,7 +166,8 @@ namespace segmentation
 	class FaceSegmentationRendererUnit : public video_framework::VideoUnit
 	{
 	public:
-		FaceSegmentationRendererUnit(const FaceSegmentationRendererOptions& options);
+		FaceSegmentationRendererUnit(const FaceSegmentationRendererOptions& options,
+			const std::map<int, RegionStat>& region_stats = std::map<int, RegionStat>());
 		~FaceSegmentationRendererUnit();
 
 		FaceSegmentationRendererUnit(const FaceSegmentationRendererUnit&) = delete;
@@ -123,15 +181,16 @@ namespace segmentation
 		void renderSelectedRegions(cv::Mat& img, const SegmentationDesc& seg_desc, 
 			const std::vector<int>& region_ids, const cv::Scalar& color = cv::Scalar(0, 0, 255));
 
+		void calcRegionCenters(const VectorMesh& mesh, const SegmentationDesc_Region2D& r,
+			std::vector<cv::Point2f>& centers);
+
 	private:
 		FaceSegmentationRendererOptions options_;
 		int video_stream_idx_;
 		int face_seg_stream_idx_;
 		int seg_stream_idx_;
-		int display_unit_id_;
-		std::string window_name_;
 
-		static int display_unit_count;
+		std::map<int, RegionStat> region_stats_;
 	};
 
 }  // namespace segmentation

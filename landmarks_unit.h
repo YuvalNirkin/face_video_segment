@@ -31,13 +31,13 @@
 
 #include "base/base.h"
 #include "video_framework/video_unit.h"
+#include <opencv2/core.hpp>
 
 namespace segmentation {
 
 	struct LandmarksOptions {
 		std::string stream_name = "LandmarksStream";
 		std::string video_stream_name = "VideoStream";
-		std::string segment_stream_name = "SegmentationStream";
 		std::string landmarks_model_file = "";
 		float output_scale = 1.0f;
 	};
@@ -45,6 +45,39 @@ namespace segmentation {
 	class LandmarksUnit : public video_framework::VideoUnit {
 	public:
 		static std::shared_ptr<LandmarksUnit> create(const LandmarksOptions& options);
+	};
+
+	struct LandmarksRendererOptions {
+		//std::string stream_name = "LandmarksRendererStream";
+		std::string video_stream_name = "VideoStream";
+		std::string landmarks_stream_name = "LandmarksStream";
+	};
+
+	class LandmarksRendererUnit : public video_framework::VideoUnit
+	{
+	public:
+		LandmarksRendererUnit(const LandmarksRendererOptions& options);
+		~LandmarksRendererUnit();
+
+		LandmarksRendererUnit(const LandmarksRendererUnit&) = delete;
+		LandmarksRendererUnit& operator=(const LandmarksRendererUnit&) = delete;
+
+		virtual bool OpenStreams(video_framework::StreamSet* set);
+		virtual void ProcessFrame(video_framework::FrameSetPtr input, std::list<video_framework::FrameSetPtr>* output);
+		virtual bool PostProcess(std::list<video_framework::FrameSetPtr>* append);
+
+	private:
+		void renderLandmarks(cv::Mat& img, const std::vector<cv::Point>& landmarks,
+			const cv::Scalar& color = cv::Scalar(0, 255, 0));
+
+	private:
+		LandmarksRendererOptions options_;
+		int video_stream_idx_;
+		int landmarks_stream_idx_;
+
+		int frame_width;
+		int frame_height;
+
 	};
 
 }  // namespace segmentation

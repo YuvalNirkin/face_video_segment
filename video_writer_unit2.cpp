@@ -62,7 +62,8 @@ namespace segmentation
 		const int frame_height = vid_stream.frame_height();
 		const float fps = vid_stream.fps();
 
-		writer_.open(video_file_, CV_FOURCC('F', 'M', 'P', '4'), fps, cv::Size(frame_width, frame_height));
+		//writer_.open(video_file_, CV_FOURCC('F', 'M', 'P', '4'), fps, cv::Size(frame_width, frame_height));
+		writer_.open(video_file_, CV_FOURCC('X', '2', '6', '4'), fps, cv::Size(frame_width, frame_height));
 
 		if(!writer_.isOpened())
 			LOG(ERROR) << "Could not open video writer!\n";

@@ -35,6 +35,7 @@
 #include <video_framework/video_writer_unit.h>
 #include <video_framework/video_pipeline.h>
 #include <segmentation/segmentation_unit.h>
+#include <boost/filesystem.hpp>
 
 using namespace video_framework;
 
@@ -52,7 +53,7 @@ namespace segmentation
 	{
 		//run_serial();
 		//run_parallel();
-		test();
+		test3();
 	}
 
 	void FaceView::run_serial()
@@ -214,15 +215,27 @@ namespace segmentation
 		// Segmentation Reader Unit
 		SegmentationReaderUnitOptions segOptions;
 		segOptions.filename = m_seg_file;
-		SegmentationReaderUnit segReader(segOptions);
-		segReader.AttachTo(&reader);
+		SegmentationReaderUnit seg_reader(segOptions);
+		seg_reader.AttachTo(&reader);
+
+		// Landmarks Unit
+		LandmarksOptions landmarks_options;
+		landmarks_options.landmarks_model_file = m_landmarks_model_file;
+		std::shared_ptr<LandmarksUnit> landmarks_unit = LandmarksUnit::create(landmarks_options);
+		landmarks_unit->AttachTo(&seg_reader);
 
 		// Segmentation Renderer Unit
 		SegmentationRenderUnitOptions seg_render_options;
 		seg_render_options.blend_alpha = 0.4f;
 		seg_render_options.hierarchy_level = 0.1f;
 		SegmentationRenderUnit seg_render(seg_render_options);
-		seg_render.AttachTo(&segReader);
+		seg_render.AttachTo(landmarks_unit.get());
+
+		// Landmarks Renderer Unit
+		LandmarksRendererOptions landmarks_renderer_options;
+		landmarks_renderer_options.video_stream_name = "RenderedRegionStream";
+		LandmarksRendererUnit landmarks_renderer(landmarks_renderer_options);
+		landmarks_renderer.AttachTo(&seg_render);
 		
 		// Video Display Unit
 		VideoDisplayOptions video_display_options;
@@ -242,5 +255,252 @@ namespace segmentation
 		// This call will block and return when the whole has been displayed.
 		if (!reader.RunRateLimited(rate_policy))
 			throw std::runtime_error("Could not process video file.");
+	}
+
+	void FaceView::test2()
+	{
+		std::vector<std::unique_ptr<VideoPipelineSource>> sources;
+		std::vector<std::unique_ptr<VideoPipelineSink>> sinks;
+
+		// Video Reader Unit
+		VideoReaderUnit reader(VideoReaderOptions(), m_video_file);
+
+		// Segmentation Reader Unit
+		SegmentationReaderUnitOptions segOptions;
+		segOptions.filename = m_seg_file;
+		SegmentationReaderUnit seg_reader(segOptions);
+		seg_reader.AttachTo(&reader);
+
+		sinks.emplace_back(new VideoPipelineSink());
+		sinks.back()->AttachTo(&seg_reader);
+		sources.emplace_back(new VideoPipelineSource(sinks.back().get()));
+
+		// Landmarks Unit
+		LandmarksOptions landmarks_options;
+		landmarks_options.landmarks_model_file = m_landmarks_model_file;
+		std::shared_ptr<LandmarksUnit> landmarks_unit = LandmarksUnit::create(landmarks_options);
+		landmarks_unit->AttachTo(sources.back().get());
+
+		sinks.emplace_back(new VideoPipelineSink());
+		sinks.back()->AttachTo(landmarks_unit.get());
+		sources.emplace_back(new VideoPipelineSource(sinks.back().get()));
+
+		// Segmentation Renderer Unit
+		SegmentationRenderUnitOptions seg_render_options;
+		seg_render_options.blend_alpha = 0.4f;
+		seg_render_options.hierarchy_level = 0.1f;
+		SegmentationRenderUnit seg_render(seg_render_options);
+		seg_render.AttachTo(sources.back().get());
+
+		// Landmarks Renderer Unit
+		LandmarksRendererOptions landmarks_renderer_options;
+		landmarks_renderer_options.video_stream_name = "RenderedRegionStream";
+		LandmarksRendererUnit landmarks_renderer(landmarks_renderer_options);
+		landmarks_renderer.AttachTo(&seg_render);
+
+		// Video Display Unit
+		VideoDisplayOptions video_display_options;
+		video_display_options.stream_name = "RenderedRegionStream";
+		VideoDisplayUnit display(video_display_options);
+		display.AttachTo(&seg_render);
+
+		// Prepare processing
+		if (!reader.PrepareProcessing())
+			throw std::runtime_error("Video framework setup failed.");
+
+		VideoPipelineInvoker invoker;
+		RatePolicy pipeline_policy;
+
+		// Start threads
+		invoker.RunRoot(&reader);
+
+		// Run last source in main thread.
+		for (int k = 0; k < sources.size() - 1; ++k) {
+			invoker.RunPipelineSource(sources[k].get());
+		}
+
+		sources.back()->Run();
+
+		invoker.WaitUntilPipelineFinished();
+	}
+
+	void FaceView::test3()
+	{
+		// Face Segmentation Global
+		FaceSegGlobalOptions face_seg_global_options;
+		FaceSegGlobalUnit face_seg_global(face_seg_global_options);
+		std::map<int, RegionStat>& region_stats = face_seg_global.getRegionStats();
+
+		// First pass
+		{
+			// Video Reader Unit
+			VideoReaderUnit reader(VideoReaderOptions(), m_video_file);
+
+			// Segmentation Reader Unit
+			SegmentationReaderUnitOptions segOptions;
+			segOptions.filename = m_seg_file;
+			SegmentationReaderUnit seg_reader(segOptions);
+			seg_reader.AttachTo(&reader);
+
+			// Landmarks Unit
+			LandmarksOptions landmarks_options;
+			landmarks_options.landmarks_model_file = m_landmarks_model_file;
+			std::shared_ptr<LandmarksUnit> landmarks_unit = LandmarksUnit::create(landmarks_options);
+			landmarks_unit->AttachTo(&seg_reader);
+
+			// Face Segmentation Global
+			face_seg_global.AttachTo(landmarks_unit.get());
+
+			// Segmentation Renderer Unit
+			SegmentationRenderUnitOptions seg_render_options;
+			seg_render_options.blend_alpha = 0.35f;
+			seg_render_options.highlight_edges = false;
+			seg_render_options.draw_shape_descriptors = true;
+			seg_render_options.hierarchy_level = 0.1f;
+			SegmentationRenderUnit seg_render(seg_render_options);
+			seg_render.AttachTo(&face_seg_global);
+
+			// Landmarks Renderer Unit
+			LandmarksRendererOptions landmarks_renderer_options;
+			landmarks_renderer_options.video_stream_name = "RenderedRegionStream";
+			LandmarksRendererUnit landmarks_renderer(landmarks_renderer_options);
+			landmarks_renderer.AttachTo(&seg_render);
+
+			// Video Display Unit
+			VideoDisplayOptions video_display_options;
+			video_display_options.stream_name = "RenderedRegionStream";
+			VideoDisplayUnit display(video_display_options);
+			display.AttachTo(&seg_render);
+
+			// Video Writer Unit
+			VideoWriter2Options writer_options;
+			writer_options.video_stream_name = "RenderedRegionStream";
+			boost::filesystem::path orig = m_output_path;
+			std::string seg_out_path = (orig.parent_path() / 
+				((orig.stem() += "_seg") += orig.extension())).string();
+			VideoWriterUnit2 writer(writer_options, seg_out_path);
+			if (!m_output_path.empty())
+			{
+				writer.AttachTo(&display);
+			}
+
+			// Prepare processing
+			if (!reader.PrepareProcessing())
+				throw std::runtime_error("Video framework setup failed.");
+
+			// Run with rate limitation.
+			RatePolicy rate_policy;
+			// Speed up playback for fun :)
+			rate_policy.max_rate = 45;
+
+			// This call will block and return when the whole has been displayed.
+			if (!reader.RunRateLimited(rate_policy))
+				throw std::runtime_error("Could not process video file.");
+		}
+		std::cout << "End of first pass" << std::endl;
+		/*
+		/// Debug ///
+		for each (auto region_stat in region_stats)
+		{
+			// Calculate average
+			float avg = 0;
+			for (size_t i = 0; i < region_stat.second.ratios.size(); ++i)
+				avg += region_stat.second.ratios[i];
+			avg /= region_stat.second.ratios.size();
+
+			if (avg > 0.0f)
+			{
+				std::cout << "region " << region_stat.first << ":" << std::endl;
+				for (size_t i = 0; i < region_stat.second.ratios.size(); ++i)
+					std::cout << region_stat.second.ratios[i] << " ";
+				std::cout << std::endl;
+			}
+			
+		}
+		/////////////
+		*/
+
+		// Calculate statistics
+		/*
+		for (auto& region_stat : region_stats)
+		{
+			// Calculate average and max
+			float avg = 0, r;
+			for (size_t i = 0; i < region_stat.second.ratios.size(); ++i)
+			{
+				r = region_stat.second.ratios[i];
+				avg += r;
+				region_stat.second.max_ratio = std::max(region_stat.second.max_ratio, r);
+			}
+			if(region_stat.second.ratios.size() > 0)
+				avg /= region_stat.second.ratios.size();
+			region_stat.second.avg = avg;
+		}
+		*/
+
+
+		// Write stats to text file
+		boost::filesystem::path orig = m_output_path;
+		std::string stats_out_path = (orig.parent_path() / (orig.stem() += "_stats.txt")).string();
+		std::ofstream ofs(stats_out_path);	
+		for (auto& region_stat : region_stats)
+		{
+			ofs << "region " << region_stat.first << " (avg = " << region_stat.second.avg << " max = " << region_stat.second.max_ratio << "):" << std::endl;
+			for (size_t i = 0; i < region_stat.second.ratios.size(); ++i)
+				ofs << region_stat.second.ratios[i] << " ";
+			ofs << std::endl;
+		}
+		ofs.close();
+
+		// Second pass
+		{
+			// Video Reader Unit
+			VideoReaderUnit reader(VideoReaderOptions(), m_video_file);
+
+			// Segmentation Reader Unit
+			SegmentationReaderUnitOptions segOptions;
+			segOptions.filename = m_seg_file;
+			SegmentationReaderUnit seg_reader(segOptions);
+			seg_reader.AttachTo(&reader);
+
+			// Face Segmentation Local Unit
+			FaceSegLocalOptions face_seg_local_options;
+			FaceSegLocalUnit face_seg_local(face_seg_local_options, region_stats);
+			face_seg_local.AttachTo(&seg_reader);
+
+			// Face Segmentation Renderer Unit
+			FaceSegmentationRendererOptions face_seg_renderer_options;
+			face_seg_renderer_options.face_segment_stream_name = "FaceSegLocalStream";
+			FaceSegmentationRendererUnit face_seg_renderer(face_seg_renderer_options, region_stats);
+			face_seg_renderer.AttachTo(&face_seg_local);
+
+			// Video Display Unit
+			VideoDisplayOptions video_display_options;
+			//video_display_options.stream_name = "RenderedRegionStream";
+			VideoDisplayUnit display(video_display_options);
+			display.AttachTo(&face_seg_renderer);
+
+			// Video Writer Unit
+			VideoWriter2Options writer_options;
+			VideoWriterUnit2 writer(writer_options, m_output_path);
+			if (!m_output_path.empty())
+			{
+				writer.AttachTo(&display);
+			}
+
+			// Prepare processing
+			if (!reader.PrepareProcessing())
+				throw std::runtime_error("Video framework setup failed.");
+
+			// Run with rate limitation.
+			RatePolicy rate_policy;
+			// Speed up playback for fun :)
+			rate_policy.max_rate = 45;
+
+			// This call will block and return when the whole has been displayed.
+			if (!reader.RunRateLimited(rate_policy))
+				throw std::runtime_error("Could not process video file.");
+		}
+		std::cout << "End of second pass" << std::endl;
 	}
 }

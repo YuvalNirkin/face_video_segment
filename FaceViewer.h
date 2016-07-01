@@ -49,6 +49,8 @@ namespace segmentation
 		void run_serial();
 		void run_parallel();
 		void test();
+		void test2();
+		void test3();
 
 	private:
 		std::string m_video_file, m_seg_file;

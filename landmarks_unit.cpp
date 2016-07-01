@@ -41,25 +41,8 @@
 #include <dlib/opencv.h>
 #include <dlib/image_processing/frontal_face_detector.h>
 #include <dlib/image_processing/shape_predictor.h>
-/*
-// boost geometry
-#include <boost/geometry/geometries/point_xy.hpp>
-#include <boost/geometry/geometries/polygon.hpp>
-#include <boost/geometry/geometries/multi_polygon.hpp>
-#include <boost/geometry/io/io.hpp>
-#include <boost/geometry/algorithms/covered_by.hpp>
-#include <boost/geometry/algorithms/correct.hpp>
-#include <boost/geometry/algorithms/intersection.hpp>
-#include <boost/geometry/strategies/strategies.hpp>	// important
-*/
 
 using namespace video_framework;
-namespace bg = boost::geometry;
-
-typedef bg::model::d2::point_xy<float> point_t;
-typedef bg::model::ring<point_t> ring_t;
-typedef bg::model::polygon<point_t> poly_t;
-typedef bg::model::multi_polygon<poly_t> mpoly_t;
 
 namespace segmentation
 {
@@ -78,8 +61,6 @@ namespace segmentation
 
 	private:
 		dlib::rectangle& selectMainFace(const cv::Mat& img, std::vector<dlib::rectangle>& faces);
-		void renderLandmarks(cv::Mat& img, const dlib::full_object_detection& landmarks,
-			const cv::Scalar& color = cv::Scalar(0, 255, 0));
 
 	private:
 		LandmarksOptions options_;
@@ -140,7 +121,7 @@ namespace segmentation
 				frame_width * options_.output_scale,
 				CV_8UC3));
 		}
-
+		/*
 		// Get segmentation stream.
 		seg_stream_idx_ = FindStreamIdx(options_.segment_stream_name, set);
 
@@ -149,6 +130,7 @@ namespace segmentation
 				<< "Could not find Segmentation stream!\n";
 			return false;
 		}
+		*/
 
 		// Add stream.
 		DataStream* landmarks_stream = new DataStream(options_.stream_name);
@@ -170,13 +152,13 @@ namespace segmentation
 		const VideoFrame* frame = input->at(video_stream_idx_)->AsPtr<VideoFrame>();
 		cv::Mat image;
 		frame->MatView(&image);
-
+		/*
 		// Retrieve Segmentation.
 		const PointerFrame<SegmentationDesc>& seg_frame =
 			input->at(seg_stream_idx_)->As<PointerFrame<SegmentationDesc>>();
 
 		const SegmentationDesc& desc = seg_frame.Ref();
-
+		*/
 		// Convert OpenCV's mat to dlib format
 		dlib::cv_image<dlib::bgr_pixel> dlib_frame(image);
 
@@ -184,7 +166,7 @@ namespace segmentation
 		std::vector<dlib::rectangle> faces = detector_(dlib_frame);
 
 		// If faces were found
-		std::unique_ptr<ring_t> landmarks_ring(new ring_t());
+		std::unique_ptr<std::vector<cv::Point>> landmarks_out(new std::vector<cv::Point>());
 		if (!faces.empty())
 		{
 			// Determine main face
@@ -195,33 +177,23 @@ namespace segmentation
 
 			// Output landmarks
 			unsigned long num_parts = landmarks.num_parts();
-			landmarks_ring->reserve(num_parts);
+			landmarks_out->reserve(num_parts);
 			for (unsigned long i = 0; i < num_parts; ++i)
 			{
-				landmarks_ring->push_back(
-				{ (float)landmarks.part(i).x(), (float)landmarks.part(i).y() });
+				landmarks_out->push_back(
+					cv::Point(landmarks.part(i).x(), landmarks.part(i).y()));
 			}
 		}
-		/*
-		if (frame_buffer_) {
-			cv::resize(image, *frame_buffer_, frame_buffer_->size());
-			cv::imshow(window_name_.c_str(), *frame_buffer_);
-		}
-		else {
-			cv::imshow(window_name_.c_str(), image);
-		}*/
 
 		// Forward input
-		input->push_back(std::shared_ptr<PointerFrame<ring_t>>(
-			new PointerFrame<ring_t>(std::move(landmarks_ring))));
+		input->push_back(std::shared_ptr<PointerFrame<std::vector<cv::Point>>>(
+			new PointerFrame<std::vector<cv::Point>>(std::move(landmarks_out))));
 
 		output->push_back(input);
-		//cv::waitKey(1);
 	}
 
 	bool LandmarksUnitImpl::PostProcess(list<FrameSetPtr>* append)
 	{
-		//cv::destroyWindow(window_name_);
 		return false;
 	}
 
@@ -248,62 +220,117 @@ namespace segmentation
 		return faces[max_index];
 	}
 
-	void LandmarksUnitImpl::renderLandmarks(cv::Mat& img,
-		const dlib::full_object_detection& landmarks,
+	LandmarksRendererUnit::LandmarksRendererUnit(const LandmarksRendererOptions& options)
+		: options_(options)
+	{
+	}
+
+	LandmarksRendererUnit::~LandmarksRendererUnit() {
+	}
+
+	bool LandmarksRendererUnit::OpenStreams(StreamSet* set)
+	{
+		// Find video stream idx.
+		video_stream_idx_ = FindStreamIdx(options_.video_stream_name, set);
+
+		if (video_stream_idx_ < 0) {
+			LOG(ERROR) << "Could not find Video stream!\n";
+			return false;
+		}
+
+		const VideoStream& vid_stream = set->at(video_stream_idx_)->As<VideoStream>();
+
+		frame_width = vid_stream.frame_width();
+		frame_height = vid_stream.frame_height();
+
+		// Get landmarks stream
+		landmarks_stream_idx_ = FindStreamIdx(options_.landmarks_stream_name, set);
+		if (landmarks_stream_idx_ < 0) {
+			LOG(ERROR) << "SegmentationRenderUnit::OpenStreams: "
+				<< "Could not find landmarks stream!\n";
+			return false;
+		}
+
+		// Add stream.
+		//DataStream* landmarks_stream = new DataStream(options_.stream_name);
+		//set->push_back(shared_ptr<DataStream>(landmarks_stream));
+
+		return true;
+	}
+
+	void LandmarksRendererUnit::ProcessFrame(FrameSetPtr input, std::list<FrameSetPtr>* output)
+	{
+		// Retrieve video frame
+		const VideoFrame* frame = input->at(video_stream_idx_)->AsPtr<VideoFrame>();
+		cv::Mat image;
+		frame->MatView(&image);
+
+		// Retrieve landmarks
+		const PointerFrame<std::vector<cv::Point>>& landmarks_frame =
+			input->at(landmarks_stream_idx_)->As<PointerFrame<std::vector<cv::Point>>>();
+
+		const std::vector<cv::Point>& landmarks = landmarks_frame.Ref();
+
+		// Render
+		renderLandmarks(image, landmarks);
+
+		// Forward input
+		/*input->push_back(std::shared_ptr<PointerFrame<ring_t>>(
+		new PointerFrame<ring_t>(std::move(landmarks_ring))));*/
+
+		output->push_back(input);
+	}
+
+	bool LandmarksRendererUnit::PostProcess(list<FrameSetPtr>* append)
+	{
+		return false;
+	}
+
+	void LandmarksRendererUnit::renderLandmarks(cv::Mat& img,
+		const std::vector<cv::Point>& landmarks,
 		const cv::Scalar& color)
 	{
-		if (landmarks.num_parts() != 68)
-			throw std::runtime_error("Each shape size must be exactly 68!");
+		if (landmarks.size() != 68) return;
 
-		const dlib::full_object_detection& d = landmarks;
+		//const dlib::full_object_detection& d = landmarks;
 		for (unsigned long i = 1; i <= 16; ++i)
-			cv::line(img, cv::Point(d.part(i).x(), d.part(i).y()),
-				cv::Point(d.part(i - 1).x(), d.part(i - 1).y()), color);
+			cv::line(img, landmarks[i], landmarks[i - 1], color);
 
 		for (unsigned long i = 28; i <= 30; ++i)
-			cv::line(img, cv::Point(d.part(i).x(), d.part(i).y()),
-				cv::Point(d.part(i - 1).x(), d.part(i - 1).y()), color);
+			cv::line(img, landmarks[i], landmarks[i - 1], color);
 
 		for (unsigned long i = 18; i <= 21; ++i)
-			cv::line(img, cv::Point(d.part(i).x(), d.part(i).y()),
-				cv::Point(d.part(i - 1).x(), d.part(i - 1).y()), color);
+			cv::line(img, landmarks[i], landmarks[i - 1], color);
+
 		for (unsigned long i = 23; i <= 26; ++i)
-			cv::line(img, cv::Point(d.part(i).x(), d.part(i).y()),
-				cv::Point(d.part(i - 1).x(), d.part(i - 1).y()), color);
+			cv::line(img, landmarks[i], landmarks[i - 1], color);
+
 		for (unsigned long i = 31; i <= 35; ++i)
-			cv::line(img, cv::Point(d.part(i).x(), d.part(i).y()),
-				cv::Point(d.part(i - 1).x(), d.part(i - 1).y()), color);
-		cv::line(img, cv::Point(d.part(30).x(), d.part(30).y()),
-			cv::Point(d.part(35).x(), d.part(35).y()), color);
+			cv::line(img, landmarks[i], landmarks[i - 1], color);
+		cv::line(img, landmarks[30], landmarks[35], color);
 
 		for (unsigned long i = 37; i <= 41; ++i)
-			cv::line(img, cv::Point(d.part(i).x(), d.part(i).y()),
-				cv::Point(d.part(i - 1).x(), d.part(i - 1).y()), color);
-		cv::line(img, cv::Point(d.part(36).x(), d.part(36).y()),
-			cv::Point(d.part(41).x(), d.part(41).y()), color);
+			cv::line(img, landmarks[i], landmarks[i - 1], color);
+		cv::line(img, landmarks[36], landmarks[41], color);
 
 		for (unsigned long i = 43; i <= 47; ++i)
-			cv::line(img, cv::Point(d.part(i).x(), d.part(i).y()),
-				cv::Point(d.part(i - 1).x(), d.part(i - 1).y()), color);
-		cv::line(img, cv::Point(d.part(42).x(), d.part(42).y()),
-			cv::Point(d.part(47).x(), d.part(47).y()), color);
+			cv::line(img, landmarks[i], landmarks[i - 1], color);
+		cv::line(img, landmarks[42], landmarks[47], color);
 
 		for (unsigned long i = 49; i <= 59; ++i)
-			cv::line(img, cv::Point(d.part(i).x(), d.part(i).y()),
-				cv::Point(d.part(i - 1).x(), d.part(i - 1).y()), color);
-		cv::line(img, cv::Point(d.part(48).x(), d.part(48).y()),
-			cv::Point(d.part(59).x(), d.part(59).y()), color);
+			cv::line(img, landmarks[i], landmarks[i - 1], color);
+		cv::line(img, landmarks[48], landmarks[59], color);
 
 		for (unsigned long i = 61; i <= 67; ++i)
-			cv::line(img, cv::Point(d.part(i).x(), d.part(i).y()),
-				cv::Point(d.part(i - 1).x(), d.part(i - 1).y()), color);
-		cv::line(img, cv::Point(d.part(60).x(), d.part(60).y()),
-			cv::Point(d.part(67).x(), d.part(67).y()), color);
+			cv::line(img, landmarks[i], landmarks[i - 1], color);
+		cv::line(img, landmarks[60], landmarks[67], color);
 
+		
 		// Add labels
 		for (unsigned long i = 0; i < 68; ++i)
-			cv::putText(img, std::to_string(i), cv::Point(d.part(i).x(), d.part(i).y()),
+			cv::putText(img, std::to_string(i), landmarks[i],
 				cv::FONT_HERSHEY_PLAIN, 0.5, color, 1.0);
+				
 	}
 
 }  // namespace video_framework.
