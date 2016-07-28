@@ -34,11 +34,68 @@
 
 #include "base/base_impl.h"
 #include <segmentation/segmentation.h>
+#include <segment_util/segmentation_render.h>
+#include <sfl/utilities.h>
 
 using namespace video_framework;
 
 namespace segmentation
 {
+	// Utilities
+
+	void createContours(const VectorMesh& mesh,
+		const SegmentationDesc_Polygon& poly,
+		std::vector<std::vector<cv::Point>>& contours)
+	{
+		contours.emplace_back();
+		std::vector<cv::Point>& contour = contours.back();
+
+		// For each coordinate
+		contour.resize(poly.coord_idx_size() - 1);
+		for (int c = 0; c < contour.size(); ++c)
+		{
+			int idx = poly.coord_idx(c);
+			contour[c] = cv::Point(mesh.coord(idx), mesh.coord(idx + 1));
+		}
+	}
+
+	void createFullFace(const std::vector<cv::Point>& landmarks,
+		std::vector<cv::Point>& full_face)
+	{
+		if (landmarks.size() != 68) return;
+
+		cv::Point dir = (landmarks[27] - landmarks[34]);
+		dir.x = -dir.x;	// Invert dx
+
+		// Jaw line
+		full_face = {
+			{ landmarks[0] },
+			{ landmarks[1] },
+			{ landmarks[2] },
+			{ landmarks[3] },
+			{ landmarks[4] },
+			{ landmarks[5] },
+			{ landmarks[6] },
+			{ landmarks[7] },
+			{ landmarks[8] },
+			{ landmarks[9] },
+			{ landmarks[10] },
+			{ landmarks[11] },
+			{ landmarks[12] },
+			{ landmarks[13] },
+			{ landmarks[14] },
+			{ landmarks[15] },
+			{ landmarks[16] }
+		};
+
+		if (landmarks[26].x > landmarks[16].x) full_face.push_back(landmarks[26]);
+		full_face.push_back(landmarks[26] + dir);
+		full_face.push_back(landmarks[24] + dir);
+		full_face.push_back(landmarks[19] + dir);
+		full_face.push_back(landmarks[17] + dir);
+		if (landmarks[17].x < landmarks[0].x) full_face.push_back(landmarks[17]);
+	}
+
 	FaceSegmentationUnit::FaceSegmentationUnit(const FaceSegmentationOptions& options)
 		: options_(options)
 	{
@@ -256,6 +313,11 @@ namespace segmentation
 		/// Debug ///
 		std::cout << "hierarchy_frame_idx " << seg_desc.hierarchy_frame_idx() << std::endl;
 		std::cout << "frame_number " << frame_number_ << std::endl;
+		for (int i = 0; i < seg_desc.hierarchy_size(); ++i)
+		{
+			const HierarchyLevel& hierarchy = seg_desc.hierarchy(i);
+			std::cout << "region_size = " << hierarchy.region_size() << std::endl;
+		}
 		/*
 		if (seg_desc.hierarchy_size() > 0)
 		{
@@ -461,6 +523,14 @@ namespace segmentation
 			return false;
 		}
 
+		// Get landmarks stream
+		landmarks_stream_idx_ = FindStreamIdx(options_.landmarks_stream_name, set);
+		if (landmarks_stream_idx_ < 0) {
+			LOG(ERROR) << "SegmentationRenderUnit::OpenStreams: "
+				<< "Could not find landmarks stream!\n";
+			return false;
+		}
+
 		// Add stream.
 		set->push_back(shared_ptr<DataStream>(new DataStream(options_.stream_name)));
 
@@ -469,18 +539,32 @@ namespace segmentation
 
 	void FaceSegLocalUnit::ProcessFrame(FrameSetPtr input, std::list<FrameSetPtr>* output)
 	{
+		// Retrieve video frame
+		const VideoFrame* vid_frame = input->at(video_stream_idx_)->AsPtr<VideoFrame>();
+		cv::Mat frame;
+		vid_frame->MatView(&frame);
+
 		// Retrieve Segmentation.
 		const PointerFrame<SegmentationDesc>& seg_frame =
 			input->at(seg_stream_idx_)->As<PointerFrame<SegmentationDesc>>();
 		const SegmentationDesc& seg_desc = seg_frame.Ref();
 
+		// Retrieve landmarks
+		const PointerFrame<std::vector<cv::Point>>& landmarks_frame =
+			input->at(landmarks_stream_idx_)->As<PointerFrame<std::vector<cv::Point>>>();
+
+		const std::vector<cv::Point>& landmarks = landmarks_frame.Ref();
+
 		// If a face has been found
-		std::unique_ptr<std::vector<int>> output_ids(new std::vector<int>());
-		findFaceRegions(seg_desc, *output_ids);
+		//std::unique_ptr<std::vector<int>> output_ids(new std::vector<int>());
+		std::unique_ptr<FaceSegLocalOutput> out_data(new FaceSegLocalOutput());
+		findFaceRegions(seg_desc, out_data->region_ids);
+		//calcSegmentation(frame, seg_desc, out_data->region_ids, out_data->seg);
+		calcSegmentation2(frame, seg_desc, landmarks, out_data->region_ids, out_data->seg);
 	
 		// Forward input
-		input->push_back(std::shared_ptr<PointerFrame<std::vector<int>>>(
-		new PointerFrame<std::vector<int>>(std::move(output_ids))));
+		input->push_back(std::shared_ptr<PointerFrame<FaceSegLocalOutput>>(
+		new PointerFrame<FaceSegLocalOutput>(std::move(out_data))));
 
 		output->push_back(input);
 		++frame_number_;
@@ -533,14 +617,127 @@ namespace segmentation
 				weighted_avg += w*ratios[i];
 			}
 			if (weight_sum > 0) weighted_avg /= (float)weight_sum;
-			else if (weighted_avg > t) output_ids.push_back(r.id());
+			if (weighted_avg > t) output_ids.push_back(r.id());
+		}
+	}
+
+	void FaceSegLocalUnit::calcSegmentation(const cv::Mat& frame, 
+		const SegmentationDesc& seg_desc, const std::vector<int>& region_ids,
+		cv::Mat& seg)
+	{
+		seg = cv::Mat_<unsigned char>::zeros(frame.size());
+
+		if (region_ids.empty()) return;
+
+		int i = 0;
+
+		// Traverse regions.
+		for (const auto& r : seg_desc.region())
+		{
+			if (r.id() != region_ids[i]) continue;
+			++i;
+			for (const auto s : r.raster().scan_inter())
+			{
+				const int curr_y = s.y();
+				uint8_t* out_ptr = seg.ptr<uint8_t>(curr_y) + s.left_x();
+				for (int j = 0, len = s.right_x() - s.left_x() + 1; j < len; ++j, ++out_ptr)
+					*out_ptr = 255;
+			}
+
+			if (i >= region_ids.size()) break;
+		}
+	}
+
+	void FaceSegLocalUnit::calcSegmentation2(const cv::Mat& frame,
+		const SegmentationDesc& seg_desc, const std::vector<cv::Point>& landmarks,
+		const std::vector<int>& region_ids, cv::Mat& seg)
+	{
+		seg = cv::Mat_<unsigned char>::zeros(frame.size());
+		if (landmarks.empty()) return;
+	
+		const VectorMesh& mesh = seg_desc.vector_mesh();
+
+		// Create face map
+		std::vector<std::vector<cv::Point>> face(1);
+		createFullFace(landmarks, face.back());
+		cv::Mat face_map = cv::Mat::zeros(frame_height_, frame_width_, CV_8U);
+		cv::drawContours(face_map, face, 0, cv::Scalar(255, 255, 255), CV_FILLED);	
+
+		/// Debug face map ///
+		//cv::imshow("face_map", face_map);
+		//cv::waitKey(0);
+		//////////////////////
+
+		// For each region
+		cv::Mat poly_map = cv::Mat::zeros(frame_height_, frame_width_, CV_8U);
+		for (const auto& r : seg_desc.region())
+		{
+			if (r.vectorization().polygon().empty()) continue;
+
+			// Find holes
+			std::vector<std::vector<cv::Point>> holes;
+			for (const auto& poly : r.vectorization().polygon())
+			{
+				if (!poly.hole()) continue;
+				if (poly.coord_idx_size() == 0) continue;
+				createContours(mesh, poly, holes);
+			}
+
+			// For each polygon
+			for (const auto& poly : r.vectorization().polygon())
+			{
+				if (poly.hole()) continue;
+				if (poly.coord_idx_size() == 0) continue;
+				std::vector<std::vector<cv::Point>> contours;
+				createContours(mesh, poly, contours);
+
+				if (!contours.empty())
+				{
+					// Render polygon
+					cv::drawContours(poly_map, contours, 0, cv::Scalar(255, 255, 255), CV_FILLED);
+
+					// Remove holes
+					cv::drawContours(poly_map, holes, 0, cv::Scalar(0, 0, 0), CV_FILLED);
+
+					/// Debug ///
+					//cv::imshow("poly_map", poly_map);
+					//cv::waitKey(0);
+					/////////////
+
+					// Compare maps
+					unsigned char *face_map_data = face_map.data, *poly_map_data = poly_map.data;
+					unsigned int face_area = 0, total_area = 0;
+					for (size_t i = 0; i < face_map.total(); ++i)
+					{
+						if (*poly_map_data++ > 0)
+						{
+							++total_area;
+							face_area += (unsigned int)(*face_map_data++ > 0);
+						}
+						else ++face_map_data;
+					}
+
+					// Test against threshold
+					if (total_area > 0)
+					{
+						float ratio = float(face_area) / total_area;
+						if(ratio > 0.5f)
+							cv::drawContours(seg, contours, 0, cv::Scalar(255, 255, 255), CV_FILLED);
+					}
+
+					// Clear map
+					cv::drawContours(poly_map, contours, 0, cv::Scalar(0, 0, 0), CV_FILLED);
+				}
+				
+			}
 		}
 	}
 
 	FaceSegmentationRendererUnit::FaceSegmentationRendererUnit(
 		const FaceSegmentationRendererOptions& options,
 		const std::map<int, RegionStat>& region_stats)
-		: options_(options), region_stats_(region_stats)
+		: options_(options), region_stats_(region_stats),
+		frame_counter_(0)
 	{
 	}
 
@@ -558,9 +755,10 @@ namespace segmentation
 
 		const VideoStream& vid_stream = set->at(video_stream_idx_)->As<VideoStream>();
 
-		const int frame_width = vid_stream.frame_width();
-		const int frame_height = vid_stream.frame_height();
-
+		frame_width_ = vid_stream.frame_width();
+		frame_height_ = vid_stream.frame_height();
+		frame_width_step_ = vid_stream.width_step();
+		fps_ = vid_stream.fps();
 		
 		// Get face segmentation stream.
 		face_seg_stream_idx_ = FindStreamIdx(options_.face_segment_stream_name, set);
@@ -579,9 +777,29 @@ namespace segmentation
 			return false;
 		}
 
+		// Get landmarks stream
+		landmarks_stream_idx_ = FindStreamIdx(options_.landmarks_stream_name, set);
+		if (landmarks_stream_idx_ < 0) {
+			LOG(ERROR) << "SegmentationRenderUnit::OpenStreams: "
+				<< "Could not find landmarks stream!\n";
+			return false;
+		}
+
+		// Add video output stream.
+		VideoStream* rendered_stream = new VideoStream(frame_width_,
+			frame_height_,
+			frame_width_step_,
+			fps_,
+			PIXEL_FORMAT_BGR24,
+			options_.stream_name);
+
+		set->push_back(shared_ptr<DataStream>(rendered_stream));
+
+		/*
 		// Add stream.
-		//DataStream* landmarks_stream = new DataStream(options_.stream_name);
-		//set->push_back(shared_ptr<DataStream>(landmarks_stream));
+		DataStream* landmarks_stream = new DataStream(options_.stream_name);
+		set->push_back(shared_ptr<DataStream>(landmarks_stream));
+		*/
 
 		return true;
 	}
@@ -590,8 +808,9 @@ namespace segmentation
 	{
 		// Retrieve video frame
 		const VideoFrame* frame = input->at(video_stream_idx_)->AsPtr<VideoFrame>();
-		cv::Mat image;
-		frame->MatView(&image);
+		cv::Mat in_frame;
+		frame->MatView(&in_frame);
+		int64_t pts = frame->pts();
 
 		// Retrieve Segmentation.
 		const PointerFrame<SegmentationDesc>& seg_frame =
@@ -599,18 +818,53 @@ namespace segmentation
 
 		const SegmentationDesc& seg_desc = seg_frame.Ref();
 
-		// Retrieve selected regions
-		const std::vector<int>& selected_regions = 
-			static_cast<PointerFrame<const std::vector<int>>*>(input->at(face_seg_stream_idx_).get())->Ref();
+		if (seg_desc.hierarchy_size() > 0)
+			m_hierarchy = seg_desc.hierarchy();
+
+		// Retrieve local face segmentation data
+		const FaceSegLocalOutput& face_seg_data =
+			static_cast<PointerFrame<FaceSegLocalOutput>*>(input->at(face_seg_stream_idx_).get())->Ref();
+
+		// Retrieve landmarks
+		const PointerFrame<std::vector<cv::Point>>& landmarks_frame =
+			input->at(landmarks_stream_idx_)->As<PointerFrame<std::vector<cv::Point>>>();
+
+		const std::vector<cv::Point>& landmarks = landmarks_frame.Ref();
+
+		// Allocate new output frame.
+		VideoFrame* render_frame =
+			new VideoFrame(frame_width_,
+				frame_height_,
+				3,
+				frame_width_step_,
+				pts);
+
+		cv::Mat out_frame;
+		render_frame->MatView(&out_frame);
 
 		// Render
-		renderSelectedRegions(image, seg_desc, selected_regions);
+		if (options_.debug)
+		{
+			in_frame.copyTo(out_frame);
+			//renderRegions(out_frame, seg_desc);
+			
+			renderSegmentation(out_frame, face_seg_data.seg);
+			renderBoundaries(out_frame, seg_desc);
+			sfl::render(out_frame, landmarks);
+			
+		}
+		else
+		{
+			// Render segmentation in the color pink
+			renderSegmentation(out_frame, face_seg_data.seg, cv::Scalar(128, 128, 192));
+		}
+
+		// renderSelectedRegions(image, seg_desc, face_seg_data.region_ids);
 
 		// Forward input
-		/*input->push_back(std::shared_ptr<PointerFrame<ring_t>>(
-		new PointerFrame<ring_t>(std::move(landmarks_ring))));*/
-
+		input->push_back(std::shared_ptr<DataFrame>(render_frame));
 		output->push_back(input);
+		++frame_counter_;
 	}
 
 	bool FaceSegmentationRendererUnit::PostProcess(list<FrameSetPtr>* append)
@@ -649,23 +903,135 @@ namespace segmentation
 
 			if (i >= region_ids.size()) break;
 		}
+	}
 
-		// Render regions ids
-		const VectorMesh& mesh = seg_desc.vector_mesh();
-		cv::Scalar textColor(0, 255, 0);
-		std::map<int, RegionStat>::const_iterator it;
-		for (const auto& r : seg_desc.region())
+	void FaceSegmentationRendererUnit::renderSegmentation(cv::Mat& frame, const cv::Mat& seg)
+	{
+		int r, c;
+		const float a = 0.5f;
+		cv::Point3_<uchar>* frame_data = (cv::Point3_<uchar>*)frame.data;
+		unsigned char* seg_data = seg.data;
+		for (r = 0; r < frame.rows; ++r)
 		{
-			it = region_stats_.find(r.id());
-			if (it == region_stats_.end()) continue;
-			if (it->second.max_ratio < 0.01f) continue;
-
-			std::vector<cv::Point2f> centers;
-			calcRegionCenters(mesh, r, centers);
-			for (cv::Point2f c : centers)
-				cv::putText(img, std::to_string(r.id()), c, cv::FONT_HERSHEY_PLAIN, 0.5, textColor, 1.0);
+			for (c = 0; c < frame.cols; ++c)
+			{
+				//a = *seg_data++ / 255.0f;
+				if (*seg_data++ > 0)
+				{
+					frame_data->x = (unsigned char)std::round(0 * a + frame_data->x*(1 - a));
+					frame_data->y = (unsigned char)std::round(0 * a + frame_data->y*(1 - a));
+					frame_data->z = (unsigned char)std::round(255 * a + frame_data->z*(1 - a));
+				}
+				++frame_data;
+			}
 		}
 	}
+
+	void FaceSegmentationRendererUnit::renderSegmentation(cv::Mat& frame, const cv::Mat& seg,
+		const cv::Scalar& color)
+	{
+		int r, c;
+		cv::Point3_<uchar>* frame_data = (cv::Point3_<uchar>*)frame.data;
+		const unsigned char* seg_data = seg.data;
+		cv::Point3_<uchar> bgr((uchar)color[0], (uchar)color[1], (uchar)color[2]);
+		for (r = 0; r < frame.rows; ++r)
+		{
+			seg_data = seg.ptr<uchar>(r);
+			frame_data = frame.ptr<cv::Point3_<uchar>>(r);
+			for (c = 0; c < frame.cols; ++c)
+			{
+				//a = *seg_data++ / 255.0f;
+				if (*seg_data++ > 0) *frame_data = bgr;
+				++frame_data;
+			}
+		}
+	}
+
+	void FaceSegmentationRendererUnit::renderBoundaries(cv::Mat& frame,
+		const SegmentationDesc& seg_desc)
+	{
+		cv::Mat tmp(frame.size(), frame.type());
+		RenderRegions(false, false, seg_desc,
+			HierarchyColorGenerator(0, 3, &seg_desc.hierarchy()),
+			&tmp);
+
+		// Edge highlight post-process.
+		const int height = frame.rows;
+		const int width = frame.cols;
+		const int width_step = frame.step[0];
+		const int channels = frame.channels();
+		for (int i = 0; i < height - 1; ++i) {
+			uint8_t* row_ptr = tmp.ptr<uint8_t>(i);
+			uint8_t* out_row_ptr = frame.ptr<uint8_t>(i);
+			for (int j = 0; j < width - 1; ++j, row_ptr += channels, out_row_ptr += channels)
+			{
+				if (ColorDiff_L1(row_ptr, row_ptr + channels) != 0 ||
+					ColorDiff_L1(row_ptr, row_ptr + width_step) != 0)
+					out_row_ptr[0] = out_row_ptr[1] = out_row_ptr[2] = 255;
+			}
+
+			// Last column.
+			if (ColorDiff_L1(row_ptr, row_ptr + width_step) != 0)
+				out_row_ptr[0] = out_row_ptr[1] = out_row_ptr[2] = 255;
+		}
+
+		// Last row.
+		uint8_t* row_ptr = tmp.ptr<uint8_t>(height - 1);
+		uint8_t* out_row_ptr = frame.ptr<uint8_t>(height - 1);
+		for (int j = 0; j < width - 1; ++j, row_ptr += channels) {
+			if (ColorDiff_L1(row_ptr, row_ptr + channels) != 0)
+				out_row_ptr[0] = out_row_ptr[1] = out_row_ptr[2] = 255;
+		}
+	}
+
+	void FaceSegmentationRendererUnit::renderRegions(cv::Mat& frame, const SegmentationDesc& seg_desc)
+	{
+		HierarchyColorGenerator generator(0, frame.channels(), &seg_desc.hierarchy());
+		std::vector<uint8_t> color(frame.channels());
+
+		// For each region
+		const VectorMesh& mesh = seg_desc.vector_mesh();
+		for (const auto& r : seg_desc.region())
+		{
+			if (r.vectorization().polygon().empty()) continue;	
+
+			// For each polygon
+			for (const auto& poly : r.vectorization().polygon())
+			{
+				std::vector<std::vector<cv::Point>> contours;
+
+				// Get color.
+				RegionID mapped_id;
+				if (!generator(r.id(), &mapped_id, &color[0])) {
+					continue;
+				}
+
+				if (poly.coord_idx_size() == 0) continue;
+				if (poly.hole())
+				{
+					// Create hole
+					//std::cout << "Found hole!" << std::endl;
+					createContours(mesh, poly, contours);
+					color[0] = color[1] = color[2];
+				}
+				else
+				{
+					createContours(mesh, poly, contours);
+				}
+
+				// Render polygon
+				if(!contours.empty())
+					cv::drawContours(frame, contours, 0, cv::Scalar(color[0], color[1], color[2]), CV_FILLED);
+
+				/// Debug ///
+				cv::imshow("renderRegions", frame);
+				cv::waitKey(0);
+				/////////////
+			}
+		}
+	}
+
+	
 
 	void FaceSegmentationRendererUnit::calcRegionCenters(const VectorMesh& mesh,
 		const SegmentationDesc_Region2D& r, std::vector<cv::Point2f>& centers)
@@ -696,6 +1062,25 @@ namespace segmentation
 			centers.push_back(center);
 		}
 		*/
+	}
+
+	void FaceSegmentationRendererUnit::renderRegionIds(cv::Mat& img, const SegmentationDesc& seg_desc,
+		const cv::Scalar& color)
+	{
+		const VectorMesh& mesh = seg_desc.vector_mesh();
+		cv::Scalar textColor(0, 255, 0);
+		std::map<int, RegionStat>::const_iterator it;
+		for (const auto& r : seg_desc.region())
+		{
+			it = region_stats_.find(r.id());
+			if (it == region_stats_.end()) continue;
+			if (it->second.max_ratio < 0.01f) continue;
+
+			std::vector<cv::Point2f> centers;
+			calcRegionCenters(mesh, r, centers);
+			for (cv::Point2f c : centers)
+				cv::putText(img, std::to_string(r.id()), c, cv::FONT_HERSHEY_PLAIN, 0.5, textColor, 1.0);
+		}
 	}
 
 }  // namespace video_framework.

@@ -124,6 +124,13 @@ namespace segmentation
 		std::string stream_name = "FaceSegLocalStream";
 		std::string video_stream_name = "VideoStream";
 		std::string segment_stream_name = "SegmentationStream";
+		std::string landmarks_stream_name = "LandmarksStream";
+	};
+
+	struct FaceSegLocalOutput
+	{
+		cv::Mat seg;
+		std::vector<int> region_ids;
 	};
 
 	class FaceSegLocalUnit : public video_framework::VideoUnit
@@ -142,6 +149,11 @@ namespace segmentation
 
 	private:
 		void findFaceRegions(const SegmentationDesc& seg_desc, std::vector<int>& output_ids);
+		void calcSegmentation(const cv::Mat& frame, const SegmentationDesc& seg_desc,
+			const std::vector<int>& region_ids, cv::Mat& seg);
+		void calcSegmentation2(const cv::Mat& frame, const SegmentationDesc& seg_desc,
+			const std::vector<cv::Point>& landmarks, const std::vector<int>& region_ids,
+			cv::Mat& seg);
 
 	private:
 		FaceSegLocalOptions options_;
@@ -161,6 +173,8 @@ namespace segmentation
 		std::string video_stream_name = "VideoStream";
 		std::string face_segment_stream_name = "FaceSegmentationStream";
 		std::string segment_stream_name = "SegmentationStream";
+		std::string landmarks_stream_name = "LandmarksStream";
+		bool debug = false;
 	};
 
 	class FaceSegmentationRendererUnit : public video_framework::VideoUnit
@@ -184,13 +198,34 @@ namespace segmentation
 		void calcRegionCenters(const VectorMesh& mesh, const SegmentationDesc_Region2D& r,
 			std::vector<cv::Point2f>& centers);
 
+		void renderRegionIds(cv::Mat& img, const SegmentationDesc& seg_desc,
+			const cv::Scalar& color = cv::Scalar(0, 0, 255));
+
+		void renderSegmentation(cv::Mat& frame, const cv::Mat& seg);
+
+		void renderSegmentation(cv::Mat& frame, const cv::Mat& seg, const cv::Scalar& color);
+
+		void renderBoundaries(cv::Mat& frame, const SegmentationDesc& seg_desc);
+
+		void renderRegions(cv::Mat& frame, const SegmentationDesc& seg_desc);
+
 	private:
 		FaceSegmentationRendererOptions options_;
 		int video_stream_idx_;
 		int face_seg_stream_idx_;
 		int seg_stream_idx_;
+		int landmarks_stream_idx_;
+
+		int frame_width_;
+		int frame_height_;
+		int frame_width_step_;
+		int frame_counter_;
+		float fps_;
 
 		std::map<int, RegionStat> region_stats_;
+
+		// Debug
+		Hierarchy m_hierarchy;
 	};
 
 }  // namespace segmentation

@@ -42,10 +42,11 @@ using namespace video_framework;
 namespace segmentation
 {
 	FaceView::FaceView(const std::string& video_file, const std::string& seg_file,
-		const std::string& landmarks_model_file, const std::string& output_path) :
+		const std::string& landmarks_path, const std::string& output_dir,
+		unsigned int verbose) :
 		m_video_file(video_file), m_seg_file(seg_file),
-		m_landmarks_model_file(landmarks_model_file),
-		m_output_path(output_path)
+		m_landmarks_path(landmarks_path), m_output_dir(output_dir),
+		m_verbose(verbose)
 	{
 	}
 
@@ -56,6 +57,7 @@ namespace segmentation
 		test3();
 	}
 
+	/*
 	void FaceView::run_serial()
 	{
 		// Video Reader Unit
@@ -155,18 +157,6 @@ namespace segmentation
 		std::unique_ptr<FaceSegmentationRendererUnit> face_seg_renderer_unit(
 			new FaceSegmentationRendererUnit(face_seg_renderer_options));
 		face_seg_renderer_unit->AttachTo(sources.back().get());
-		/*
-		// Video Writer Unit
-		std::unique_ptr<VideoWriterUnit> writer_unit;
-		if (!m_output_path.empty())
-		{
-			VideoWriterOptions writer_options;
-			writer_options.bit_rate = 40000000;
-			writer_options.fraction = 16;
-			writer_unit.reset(new VideoWriterUnit(writer_options, m_output_path));
-			writer_unit->AttachTo(face_seg_renderer_unit.get());
-		}
-		*/
 
 		// Video Writer Unit 2
 		std::unique_ptr<VideoWriterUnit2> writer_unit;
@@ -323,9 +313,20 @@ namespace segmentation
 
 		invoker.WaitUntilPipelineFinished();
 	}
+	*/
 
 	void FaceView::test3()
 	{
+		boost::filesystem::path orig = m_video_file;
+		std::string seg_out_path = (boost::filesystem::path(m_output_dir) /
+			(orig.stem() += "_seg.mp4")).string();
+		std::string debug1_out_path = (boost::filesystem::path(m_output_dir) /
+			(orig.stem() += "_debug1.mp4")).string();
+		std::string debug2_out_path = (boost::filesystem::path(m_output_dir) /
+			(orig.stem() += "_debug2.mp4")).string();
+		std::string stats_out_path = (boost::filesystem::path(m_output_dir) / 
+			(orig.stem() += "_stats.txt")).string();
+
 		// Face Segmentation Global
 		FaceSegGlobalOptions face_seg_global_options;
 		FaceSegGlobalUnit face_seg_global(face_seg_global_options);
@@ -344,13 +345,56 @@ namespace segmentation
 
 			// Landmarks Unit
 			LandmarksOptions landmarks_options;
-			landmarks_options.landmarks_model_file = m_landmarks_model_file;
-			std::shared_ptr<LandmarksUnit> landmarks_unit = LandmarksUnit::create(landmarks_options);
-			landmarks_unit->AttachTo(&seg_reader);
+			landmarks_options.landmarks_path = m_landmarks_path;
+			LandmarksUnit landmarks_unit(landmarks_options);
+			landmarks_unit.AttachTo(&seg_reader);
 
 			// Face Segmentation Global
-			face_seg_global.AttachTo(landmarks_unit.get());
+			face_seg_global.AttachTo(&landmarks_unit);
 
+			// Debug segmentation
+			std::unique_ptr<SegmentationRenderUnit> seg_render;
+			std::unique_ptr<LandmarksRendererUnit> landmarks_renderer;
+			std::unique_ptr<VideoDisplayUnit> display;
+			std::unique_ptr<VideoWriterUnit2> writer;
+			if (m_verbose > 0)
+			{
+				// Face Segmentation Renderer Unit
+				SegmentationRenderUnitOptions seg_render_options;
+				seg_render_options.blend_alpha = 0.35f;
+				seg_render_options.highlight_edges = false;
+				seg_render_options.draw_shape_descriptors = true;
+				seg_render_options.hierarchy_level = 0.1f;
+				seg_render.reset(
+					new SegmentationRenderUnit(seg_render_options));
+				seg_render->AttachTo(&face_seg_global);
+
+				// Landmarks Renderer Unit
+				LandmarksRendererOptions landmarks_renderer_options;
+				landmarks_renderer_options.video_stream_name = seg_render_options.out_stream_name;
+				landmarks_renderer.reset(
+					new LandmarksRendererUnit(landmarks_renderer_options));
+				landmarks_renderer->AttachTo(seg_render.get());
+
+				// Video Display Unit
+				VideoDisplayOptions video_display_options;
+				video_display_options.stream_name = seg_render_options.out_stream_name;
+				display.reset(
+					new VideoDisplayUnit(video_display_options));
+				display->AttachTo(landmarks_renderer.get());
+
+				// Video Writer Unit
+				VideoWriter2Options writer_options;
+				writer_options.video_stream_name = seg_render_options.out_stream_name;
+				writer.reset(
+					new VideoWriterUnit2(writer_options, debug1_out_path));
+				if (!m_output_dir.empty())
+				{
+					writer->AttachTo(display.get());
+				}
+			}
+
+			/*
 			// Segmentation Renderer Unit
 			SegmentationRenderUnitOptions seg_render_options;
 			seg_render_options.blend_alpha = 0.35f;
@@ -375,14 +419,12 @@ namespace segmentation
 			// Video Writer Unit
 			VideoWriter2Options writer_options;
 			writer_options.video_stream_name = "RenderedRegionStream";
-			boost::filesystem::path orig = m_output_path;
-			std::string seg_out_path = (orig.parent_path() / 
-				((orig.stem() += "_seg") += orig.extension())).string();
-			VideoWriterUnit2 writer(writer_options, seg_out_path);
-			if (!m_output_path.empty())
+			VideoWriterUnit2 writer(writer_options, debug1_out_path);
+			if (!m_output_dir.empty())
 			{
 				writer.AttachTo(&display);
 			}
+			*/
 
 			// Prepare processing
 			if (!reader.PrepareProcessing())
@@ -391,7 +433,7 @@ namespace segmentation
 			// Run with rate limitation.
 			RatePolicy rate_policy;
 			// Speed up playback for fun :)
-			rate_policy.max_rate = 45;
+			rate_policy.max_rate = 100;	// 45
 
 			// This call will block and return when the whole has been displayed.
 			if (!reader.RunRateLimited(rate_policy))
@@ -440,14 +482,14 @@ namespace segmentation
 
 
 		// Write stats to text file
-		boost::filesystem::path orig = m_output_path;
-		std::string stats_out_path = (orig.parent_path() / (orig.stem() += "_stats.txt")).string();
 		std::ofstream ofs(stats_out_path);	
 		for (auto& region_stat : region_stats)
 		{
-			ofs << "region " << region_stat.first << " (avg = " << region_stat.second.avg << " max = " << region_stat.second.max_ratio << "):" << std::endl;
+			ofs << "region " << region_stat.first << ":" << std::endl;
 			for (size_t i = 0; i < region_stat.second.ratios.size(); ++i)
-				ofs << region_stat.second.ratios[i] << " ";
+			{
+				ofs << "(" << region_stat.second.frame_ids[i] << ", " << region_stat.second.ratios[i] << ") ";
+			}
 			ofs << std::endl;
 		}
 		ofs.close();
@@ -463,29 +505,69 @@ namespace segmentation
 			SegmentationReaderUnit seg_reader(segOptions);
 			seg_reader.AttachTo(&reader);
 
+			// Landmarks Unit
+			LandmarksOptions landmarks_options;
+			landmarks_options.landmarks_path = m_landmarks_path;
+			LandmarksUnit landmarks_unit(landmarks_options);
+			landmarks_unit.AttachTo(&seg_reader);
+
 			// Face Segmentation Local Unit
 			FaceSegLocalOptions face_seg_local_options;
 			FaceSegLocalUnit face_seg_local(face_seg_local_options, region_stats);
-			face_seg_local.AttachTo(&seg_reader);
+			face_seg_local.AttachTo(&landmarks_unit);
 
 			// Face Segmentation Renderer Unit
 			FaceSegmentationRendererOptions face_seg_renderer_options;
-			face_seg_renderer_options.face_segment_stream_name = "FaceSegLocalStream";
+			face_seg_renderer_options.face_segment_stream_name = face_seg_local_options.stream_name;
 			FaceSegmentationRendererUnit face_seg_renderer(face_seg_renderer_options, region_stats);
 			face_seg_renderer.AttachTo(&face_seg_local);
 
 			// Video Display Unit
 			VideoDisplayOptions video_display_options;
-			//video_display_options.stream_name = "RenderedRegionStream";
+			video_display_options.stream_name = face_seg_renderer_options.stream_name;
 			VideoDisplayUnit display(video_display_options);
 			display.AttachTo(&face_seg_renderer);
 
 			// Video Writer Unit
 			VideoWriter2Options writer_options;
-			VideoWriterUnit2 writer(writer_options, m_output_path);
-			if (!m_output_path.empty())
+			writer_options.video_stream_name = face_seg_renderer_options.stream_name;
+			VideoWriterUnit2 writer(writer_options, seg_out_path);
+			if (!m_output_dir.empty())
 			{
 				writer.AttachTo(&display);
+			}
+
+			// Debug segmentation
+			std::unique_ptr<FaceSegmentationRendererUnit> face_seg_renderer_debug;
+			std::unique_ptr<VideoDisplayUnit> face_seg_display_debug;
+			std::unique_ptr<VideoWriterUnit2> face_seg_writer_debug;
+			if (m_verbose > 1)
+			{
+				// Face Segmentation Renderer Unit
+				FaceSegmentationRendererOptions face_seg_renderer_options;
+				face_seg_renderer_options.stream_name = "FaceSegmentationRendererDebug";
+				face_seg_renderer_options.face_segment_stream_name = face_seg_local_options.stream_name;
+				face_seg_renderer_options.debug = true;
+				face_seg_renderer_debug.reset(
+					new FaceSegmentationRendererUnit(face_seg_renderer_options));
+				face_seg_renderer_debug->AttachTo(&writer);
+
+				// Video Display Unit
+				VideoDisplayOptions video_display_options;
+				video_display_options.stream_name = face_seg_renderer_options.stream_name;
+				face_seg_display_debug.reset(
+					new VideoDisplayUnit(video_display_options));
+				face_seg_display_debug->AttachTo(face_seg_renderer_debug.get());
+
+				// Video Writer Unit
+				VideoWriter2Options writer_options;
+				writer_options.video_stream_name = face_seg_renderer_options.stream_name;
+				face_seg_writer_debug.reset(
+					new VideoWriterUnit2(writer_options, debug2_out_path));
+				if (!m_output_dir.empty())
+				{
+					face_seg_writer_debug->AttachTo(face_seg_display_debug.get());
+				}
 			}
 
 			// Prepare processing

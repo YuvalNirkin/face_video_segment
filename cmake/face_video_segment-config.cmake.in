@@ -1,0 +1,24 @@
+# - Config file for the face_video_segment package
+# It defines the following variables
+#  FACE_VIDEO_SEGMENT_INCLUDE_DIRS - include directories for face_video_segment
+#  FACE_VIDEO_SEGMENT_LIBRARIES    - libraries to link against
+#  FACE_VIDEO_SEGMENT_EXECUTABLE   - the face_video_segment executable
+ 
+# Compute paths
+get_filename_component(FACE_VIDEO_SEGMENT_CMAKE_DIR "${CMAKE_CURRENT_LIST_FILE}" DIRECTORY)
+set(FACE_VIDEO_SEGMENT_INCLUDE_DIRS ${FACE_VIDEO_SEGMENT_CMAKE_DIR}/include)
+
+# Our library dependencies (contains definitions for IMPORTED targets)
+if(NOT TARGET face_video_segment AND NOT face_video_segment_BINARY_DIR)
+  include("${FACE_VIDEO_SEGMENT_CMAKE_DIR}/face_video_segment-targets.cmake")
+endif()
+ 
+# These are IMPORTED targets created by face_video_segment-targets.cmake
+set(FACE_VIDEO_SEGMENT_LIBRARIES face_video_segment)
+if(TARGET face_video_segment)
+	set(FACE_VIDEO_SEGMENT_EXECUTABLE face_video_segment)
+endif()
+
+if(face_video_segment_FOUND)
+	message(STATUS "Found face_video_segment!")
+endif()

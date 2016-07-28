@@ -41,20 +41,22 @@ namespace segmentation
 	{
 	public:
 		FaceView(const std::string& video_file, const std::string& seg_file,
-			const std::string& landmarks_model_file, const std::string& output_path = "");
+			const std::string& landmarks_path, const std::string& output_dir = "",
+			unsigned int verbose = 0);
 
 		void run();
 
 	private:
-		void run_serial();
-		void run_parallel();
-		void test();
-		void test2();
+		//void run_serial();
+		//void run_parallel();
+		//void test();
+		//void test2();
 		void test3();
 
 	private:
 		std::string m_video_file, m_seg_file;
-		std::string m_landmarks_model_file;
-		std::string m_output_path;
+		std::string m_landmarks_path;
+		std::string m_output_dir;
+		unsigned int m_verbose;
 	};
 }

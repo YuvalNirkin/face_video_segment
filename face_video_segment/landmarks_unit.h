@@ -31,6 +31,8 @@
 
 #include "base/base.h"
 #include "video_framework/video_unit.h"
+#include <sfl/sequence_face_landmarks.h>
+#include <sfl/utilities.h>
 #include <opencv2/core.hpp>
 
 namespace segmentation {
@@ -38,14 +40,40 @@ namespace segmentation {
 	struct LandmarksOptions {
 		std::string stream_name = "LandmarksStream";
 		std::string video_stream_name = "VideoStream";
-		std::string landmarks_model_file = "";
-		float output_scale = 1.0f;
+		std::string landmarks_path = "";
+		float frame_scale = 1.0f;
+		bool track_faces = true;
 	};
 
 	class LandmarksUnit : public video_framework::VideoUnit {
 	public:
+		LandmarksUnit(const LandmarksOptions& options);
+		~LandmarksUnit();
+
+		LandmarksUnit(const LandmarksUnit&) = delete;
+		LandmarksUnit& operator=(const LandmarksUnit&) = delete;
+
+		virtual bool OpenStreams(video_framework::StreamSet* set);
+		virtual void ProcessFrame(video_framework::FrameSetPtr input, std::list<video_framework::FrameSetPtr>* output);
+		virtual bool PostProcess(std::list<video_framework::FrameSetPtr>* append);
+
+	private:
+		LandmarksOptions options_;
+		std::shared_ptr<sfl::SequenceFaceLandmarks> sfl_;
+		std::list<std::unique_ptr<sfl::Frame>>::const_iterator sequence_it;
+
+		int video_stream_idx_;
+		int frame_width_;
+		int frame_height_;
+		int main_face_id_;
+	};
+
+	/*
+	class LandmarksUnit : public video_framework::VideoUnit {
+	public:
 		static std::shared_ptr<LandmarksUnit> create(const LandmarksOptions& options);
 	};
+	*/
 
 	struct LandmarksRendererOptions {
 		//std::string stream_name = "LandmarksRendererStream";
@@ -67,16 +95,13 @@ namespace segmentation {
 		virtual bool PostProcess(std::list<video_framework::FrameSetPtr>* append);
 
 	private:
-		void renderLandmarks(cv::Mat& img, const std::vector<cv::Point>& landmarks,
-			const cv::Scalar& color = cv::Scalar(0, 255, 0));
-
-	private:
 		LandmarksRendererOptions options_;
 		int video_stream_idx_;
 		int landmarks_stream_idx_;
 
 		int frame_width;
 		int frame_height;
+		int frame_num_ = 0;
 
 	};
 

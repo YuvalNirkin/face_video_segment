@@ -5,7 +5,7 @@ project(face_video_segment)
 # ===================================================
 set(FACE_VIDEO_SEGMENT_MAJOR_VERSION 0)
 set(FACE_VIDEO_SEGMENT_MINOR_VERSION 5)
-set(FACE_VIDEO_SEGMENT_VERSION ${MFACE_VIDEO_SEGMENT_MAJOR_VERSION}.${FACE_VIDEO_SEGMENT_MINOR_VERSION})
+set(FACE_VIDEO_SEGMENT_VERSION ${FACE_VIDEO_SEGMENT_MAJOR_VERSION}.${FACE_VIDEO_SEGMENT_MINOR_VERSION})
 
 # Global configurations
 # ===================================================
@@ -15,6 +15,11 @@ if(UNIX)
 else()
 	 SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DNOMINMAX")
 endif()
+
+# Build components
+# ===================================================
+option(BUILD_DOCS "Build documentation using Doxygen" ON)
+option(BUILD_INTERFACE_MATLAB "Build interface for Matlab" ON)
 
 # Find dependencies
 # ===================================================
@@ -36,10 +41,40 @@ find_package(OpenCV REQUIRED highgui imgproc imgcodecs)
 find_package(dlib REQUIRED)
 find_package(glog REQUIRED)
 find_package(video_segment REQUIRED)
+find_package(find_face_landmarks REQUIRED)
 
-# Add target
+# Process subdirectories
 # ===================================================
-add_executable(face_video_segment face_video_segment.cpp FaceViewer.h FaceViewer.cpp landmarks_unit.h landmarks_unit.cpp
-	face_segmentation_unit.h face_segmentation_unit.cpp video_writer_unit2.h video_writer_unit2.cpp)
-target_include_directories(face_video_segment PRIVATE ${VIDEO_SEGMENT_INCLUDE_DIRS} ${gflags_INCLUDE_DIRS} ${dlib_INCLUDE_DIRS})
-target_link_libraries(face_video_segment PRIVATE ${VIDEO_SEGMENT_LIBRARIES} ${gflags_LIBRARIES} ${dlib_LIBRARIES})
+
+add_subdirectory(face_video_segment)
+
+# interfaces
+if(BUILD_INTERFACE_MATLAB)
+	add_subdirectory(interfaces/matlab)
+endif()
+
+# Export configuration
+# ===================================================
+
+# Add all targets to the build-tree export set
+export(TARGETS face_video_segment
+  FILE "${PROJECT_BINARY_DIR}/face_video_segment-targets.cmake")
+  
+# Export the package for use from the build-tree
+# (this registers the build-tree with a global CMake-registry)
+export(PACKAGE face_video_segment)
+
+# Create config files
+configure_file(cmake/face_video_segment-config.cmake.in
+  "${PROJECT_BINARY_DIR}/face_video_segment-config.cmake" @ONLY)
+configure_file(cmake/face_video_segment-config-version.cmake.in
+  "${PROJECT_BINARY_DIR}/face_video_segment-config-version.cmake" @ONLY)
+  
+# Install config files
+install(FILES
+  "${PROJECT_BINARY_DIR}/face_video_segment-config.cmake"
+  "${PROJECT_BINARY_DIR}/face_video_segment-config-version.cmake"
+  DESTINATION "cmake" COMPONENT dev)
+  
+# Install the export set for use with the install-tree
+install(EXPORT face_video_segment-targets DESTINATION cmake COMPONENT dev)

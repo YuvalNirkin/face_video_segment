@@ -30,17 +30,19 @@
 #include <iostream>
 #include <string>
 #include <boost/program_options.hpp>
+#include <boost/filesystem.hpp>
 
 using std::string;
 using std::cout;
 using std::endl;
 using std::cerr;
 using namespace boost::program_options;
+using namespace boost::filesystem;
 
 int main(int argc, char* argv[])
 {
 	// Parse command line arguments
-	string inputPath, outputPath, segPath, landmarksModelPath;
+	string inputPath, outputDir, segPath, landmarksPath;
 	int device;
 	unsigned int width, height, verbose;
 	double fps, frame_scale;
@@ -50,9 +52,9 @@ int main(int argc, char* argv[])
 		desc.add_options()
 			("help", "display the help message")
 			("input,i", value<string>(&inputPath), "path to video file")
-			("output,o", value<string>(&outputPath), "output path")
+			("output,o", value<string>(&outputDir), "output directory")
 			("segmentation,s", value<string>(&segPath), "input segmentation protobuffer (.pb)")
-			("landmarks,l", value<string>(&landmarksModelPath), "path to landmarks model file")
+			("landmarks,l", value<string>(&landmarksPath), "path to landmarks model or cache (.pb)")
 			("verbose,v", value<unsigned int>(&verbose)->default_value(0), "output debug information")
 			;
 		variables_map vm;
@@ -64,6 +66,18 @@ int main(int argc, char* argv[])
 			exit(0);
 		}
 		notify(vm);
+		if (!is_regular_file(inputPath)) throw error("input must be a path to a file!");
+		if (vm.count("output") && !is_directory(outputDir))
+			throw error("output must be a path to a directory!");
+		if (!is_regular_file(segPath)) throw error("segmentation must be a path to a file!");
+		if (!is_regular_file(landmarksPath))
+		{
+			path input = path(inputPath);
+			landmarksPath =
+				(input.parent_path() / (input.stem() += "_landmarks.pb")).string();
+			if (!is_regular_file(landmarksPath))
+				throw error("Couldn't find landmarks model or cache file!");
+		}
 	}
 	catch (const error& e) {
 		cout << "Error while parsing command-line arguments: " << e.what() << endl;
@@ -73,7 +87,7 @@ int main(int argc, char* argv[])
 
 	try
 	{
-		segmentation::FaceView viewer(inputPath, segPath, landmarksModelPath, outputPath);
+		segmentation::FaceView viewer(inputPath, segPath, landmarksPath, outputDir, verbose);
 		viewer.run();
 	}
 	catch (std::exception& e)
@@ -84,39 +98,3 @@ int main(int argc, char* argv[])
 
 	return 0;
 }
-/*
-DEFINE_string(input, "", "The input segmentation protobuffer (.pb). REQUIRED");
-DEFINE_string(window_name, "", "Use different window names to support "
-                               "multiple viewer sessions.");
-
-int main(int argc, char** argv) {
-  // Initialize Google's logging library.
-  google::InitGoogleLogging(argv[0]);
-  google::ParseCommandLineFlags(&argc, &argv, true);
-
-  if (FLAGS_input.empty()) {
-    std::cout << "Usage: segment_viewer -input=FILE_NAME\n";
-    return 1;
-  }
-
-  std::string window_name;
-  if (FLAGS_window_name.empty()) {
-    window_name = argv[2];
-  } else {
-    // if not set as the filename
-    size_t temp = FLAGS_input.find_last_of("/\\");
-    window_name = FLAGS_input.substr(temp+1);
-  }
-
-  Viewer viewer(FLAGS_input, window_name);
-  if (!viewer.ReadFile()) {
-    LOG(ERROR) << "Could not read file!";
-    return 1;
-  }
-
-  viewer.CreateUI();
-  viewer.Run();
-
-   return 0;
-}
-*/
