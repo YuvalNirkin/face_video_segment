@@ -64,7 +64,8 @@ namespace segmentation
 	{
 		if (landmarks.size() != 68) return;
 
-		cv::Point dir = (landmarks[27] - landmarks[34]);
+		//cv::Point dir = (landmarks[27] - landmarks[34]);	// Why 34??
+		cv::Point dir = (landmarks[27] - landmarks[30]);
 		dir.x = -dir.x;	// Invert dx
 
 		// Jaw line
@@ -549,6 +550,13 @@ namespace segmentation
 			input->at(seg_stream_idx_)->As<PointerFrame<SegmentationDesc>>();
 		const SegmentationDesc& seg_desc = seg_frame.Ref();
 
+		// If it is the first frame, save it into seg_hier_ and determine overall
+		// hierarchy render level.
+		if (seg_hier_ == nullptr)
+			seg_hier_.reset(new SegmentationDesc(seg_desc));
+		else if (seg_desc.hierarchy_size() > 0)		// Update hierarchy when one present.
+			*seg_hier_ = seg_desc;
+
 		// Retrieve landmarks
 		const PointerFrame<std::vector<cv::Point>>& landmarks_frame =
 			input->at(landmarks_stream_idx_)->As<PointerFrame<std::vector<cv::Point>>>();
@@ -657,15 +665,40 @@ namespace segmentation
 	
 		const VectorMesh& mesh = seg_desc.vector_mesh();
 
+		const float pi = std::acos(-1);
+		const float cos_a_t = std::cos(pi / 3);
+		const float out_t = 0.1f;
+
 		// Create face map
 		std::vector<std::vector<cv::Point>> face(1);
 		createFullFace(landmarks, face.back());
 		cv::Mat face_map = cv::Mat::zeros(frame_height_, frame_width_, CV_8U);
+
+		// Draw jaw
+		float jaw_width = cv::norm(landmarks[2] - landmarks[14]);
+		int jaw_thickness = (int)std::round(0.1f*jaw_width);
+		for (size_t i = 3; i <= 14; ++i)
+			cv::line(face_map, landmarks[i], landmarks[i - 1],
+				cv::Scalar(128, 128, 128), jaw_thickness);
+
+		// Draw face
 		cv::drawContours(face_map, face, 0, cv::Scalar(255, 255, 255), CV_FILLED);	
 
+		// Calculate total jaw area
+		unsigned char *face_map_data = face_map.data;
+		unsigned int total_jaw_area = 0;
+		for (size_t i = 0; i < face_map.total(); ++i)
+			if (*face_map_data++ == 128) ++total_jaw_area;
+
+		// Calculate total face area
+		face_map_data = face_map.data;
+		unsigned int total_face_area = 0;
+		for (size_t i = 0; i < face_map.total(); ++i)
+			if (*face_map_data++ == 255) ++total_face_area;
+
 		/// Debug face map ///
-		//cv::imshow("face_map", face_map);
-		//cv::waitKey(0);
+		cv::imshow("face_map", face_map);
+		cv::waitKey(1);
 		//////////////////////
 
 		// For each region
@@ -701,12 +734,97 @@ namespace segmentation
 
 					/// Debug ///
 					//cv::imshow("poly_map", poly_map);
-					//cv::waitKey(0);
+					//cv::waitKey(1);
 					/////////////
 
 					// Compare maps
 					unsigned char *face_map_data = face_map.data, *poly_map_data = poly_map.data;
-					unsigned int face_area = 0, total_area = 0;
+					unsigned char fp;
+					unsigned int face_area = 0, total_area = 0, jaw_area = 0;
+					int pr, pc;
+					float avg_out_r = 0, avg_out_c = 0;
+					for (pr = 0; pr < face_map.rows; ++pr)
+					{
+						for (pc = 0; pc < face_map.cols; ++pc)
+						{
+							if (*poly_map_data++ > 0)
+							{
+								++total_area;
+								fp = *face_map_data++;
+								if (fp == 255) ++face_area;
+								else	// Outside face
+								{
+									if (fp == 128) ++jaw_area;	// Jaw outline
+									avg_out_r += (float)pr;
+									avg_out_c += (float)pc;
+								}
+								
+							}
+							else ++face_map_data;
+						}
+					}
+					unsigned int out_area = total_area - face_area;
+					float cos_a = 0;
+					if (out_area > 0)
+					{
+						avg_out_r /= out_area;
+						avg_out_c /= out_area;
+						cv::Point2f poly_center(std::round(avg_out_c), std::round(avg_out_r));
+
+						cv::Point2f face_dir = landmarks[8] - landmarks[27];
+						cv::Point2f poly_dir = poly_center - cv::Point2f(landmarks[27]);
+						face_dir /= cv::norm(face_dir);
+						poly_dir /= cv::norm(poly_dir);
+						cos_a = face_dir.dot(poly_dir);
+					}
+
+					// Test against threshold
+					if (total_area > 0)
+					{
+						float in_ratio = float(face_area) / total_area;
+						float out_ratio = float(out_area) / total_area;
+						float jaw_poly_ratio = float(jaw_area) / total_area;
+						float jaw_ratio = float(jaw_area) / total_jaw_area;
+						float in_face_ratio = float(face_area) / total_face_area;
+						float out_face_ratio = float(out_area) / total_face_area;
+
+						//if (in_ratio > 0.2f && out_ratio > 0.2f && cos_a > cos_a_t)
+						//if (in_ratio > 0.1f && out_ratio > 0.1f && (jaw_ratio > 0.05f && jaw_poly_ratio < 0.5f))
+						if (in_face_ratio > 0.01f && out_face_ratio > 0.01f && (jaw_ratio > 0.05f && jaw_poly_ratio > 0.02f && jaw_poly_ratio < 0.5f))
+						{
+							// Found neck region
+							cv::drawContours(seg, contours, 0, cv::Scalar(128, 128, 128), CV_FILLED);
+							//std::cout << "cos_a = " << cos_a << ", in_ratio = " << in_ratio << ", out_ratio = " << out_ratio << std::endl;
+//							std::cout << "jaw_ratio = " << jaw_ratio << ", in_ratio = " << in_ratio << ", out_ratio = " << out_ratio << std::endl;
+							//std::cout << "Found neck!" << std::endl;
+						}
+						else if (in_ratio > 0.5f)
+							cv::drawContours(seg, contours, 0, cv::Scalar(255, 255, 255), CV_FILLED);
+
+						/// Debug ///
+						if (in_face_ratio > 0.01f && out_face_ratio > 0.01f && (jaw_ratio > 0.05f && jaw_poly_ratio > 0.02f && jaw_poly_ratio < 0.5f))
+						{
+							//std::cout << "jaw_ratio = " << jaw_ratio << ", jaw_poly_ratio = " << jaw_poly_ratio << ", in_ratio = " << in_ratio << ", out_ratio = " << out_ratio << std::endl;
+							std::cout << "jaw_ratio = " << jaw_ratio << ", jaw_poly_ratio = " << jaw_poly_ratio << ", in_face_ratio = " << in_face_ratio << ", out_face_ratio = " << out_face_ratio << std::endl;
+							/*
+							const CompoundRegion& cr = GetCompoundRegionFromId(r.id(), seg_hier_->hierarchy(0));
+							std::cout << "id = " << r.id() << std::endl;
+							std::cout << "parent_id = " << cr.parent_id() << std::endl;
+							std::cout << "child_ids = ";
+							for (int child_id : cr.child_id())
+								std::cout << cr.parent_id() << " ";
+							std::cout << std::endl;
+							*/
+							/*
+							std::cout << "cos_a = " << cos_a << ", in_ratio = " << in_ratio << ", out_ratio = " << out_ratio << std::endl;
+							cv::imshow("seg", seg);
+							cv::waitKey(0);
+							*/
+						}
+						/////////////
+					}
+
+					/*
 					for (size_t i = 0; i < face_map.total(); ++i)
 					{
 						if (*poly_map_data++ > 0)
@@ -716,7 +834,8 @@ namespace segmentation
 						}
 						else ++face_map_data;
 					}
-
+					*/
+					/*
 					// Test against threshold
 					if (total_area > 0)
 					{
@@ -724,6 +843,7 @@ namespace segmentation
 						if(ratio > 0.5f)
 							cv::drawContours(seg, contours, 0, cv::Scalar(255, 255, 255), CV_FILLED);
 					}
+					*/
 
 					// Clear map
 					cv::drawContours(poly_map, contours, 0, cv::Scalar(0, 0, 0), CV_FILLED);
@@ -731,6 +851,12 @@ namespace segmentation
 				
 			}
 		}
+		/*
+		/// Debug ///
+		cv::imshow("seg", seg);
+		cv::waitKey(1);
+		/////////////
+		*/
 	}
 
 	FaceSegmentationRendererUnit::FaceSegmentationRendererUnit(
@@ -911,16 +1037,24 @@ namespace segmentation
 		const float a = 0.5f;
 		cv::Point3_<uchar>* frame_data = (cv::Point3_<uchar>*)frame.data;
 		unsigned char* seg_data = seg.data;
+		unsigned char s;
 		for (r = 0; r < frame.rows; ++r)
 		{
 			for (c = 0; c < frame.cols; ++c)
 			{
 				//a = *seg_data++ / 255.0f;
-				if (*seg_data++ > 0)
+				s = *seg_data++;
+				if (s == 255)
 				{
 					frame_data->x = (unsigned char)std::round(0 * a + frame_data->x*(1 - a));
 					frame_data->y = (unsigned char)std::round(0 * a + frame_data->y*(1 - a));
 					frame_data->z = (unsigned char)std::round(255 * a + frame_data->z*(1 - a));
+				}
+				else if (s == 128)
+				{
+					frame_data->x = (unsigned char)std::round(255 * a + frame_data->x*(1 - a));
+					frame_data->y = (unsigned char)std::round(0 * a + frame_data->y*(1 - a));
+					frame_data->z = (unsigned char)std::round(0 * a + frame_data->z*(1 - a));
 				}
 				++frame_data;
 			}

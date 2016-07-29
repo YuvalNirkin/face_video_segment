@@ -166,6 +166,9 @@ namespace segmentation
 
 		const std::map<int, RegionStat>& region_stats_;
 		int frame_number_ = 0;
+
+		// Holds the segmentation for the current chunk.
+		std::unique_ptr<SegmentationDesc> seg_hier_;
 	};
 
 	struct FaceSegmentationRendererOptions {

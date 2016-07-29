@@ -331,7 +331,7 @@ namespace segmentation
 		FaceSegGlobalOptions face_seg_global_options;
 		FaceSegGlobalUnit face_seg_global(face_seg_global_options);
 		std::map<int, RegionStat>& region_stats = face_seg_global.getRegionStats();
-
+		/*
 		// First pass
 		{
 			// Video Reader Unit
@@ -394,38 +394,6 @@ namespace segmentation
 				}
 			}
 
-			/*
-			// Segmentation Renderer Unit
-			SegmentationRenderUnitOptions seg_render_options;
-			seg_render_options.blend_alpha = 0.35f;
-			seg_render_options.highlight_edges = false;
-			seg_render_options.draw_shape_descriptors = true;
-			seg_render_options.hierarchy_level = 0.1f;
-			SegmentationRenderUnit seg_render(seg_render_options);
-			seg_render.AttachTo(&face_seg_global);
-
-			// Landmarks Renderer Unit
-			LandmarksRendererOptions landmarks_renderer_options;
-			landmarks_renderer_options.video_stream_name = "RenderedRegionStream";
-			LandmarksRendererUnit landmarks_renderer(landmarks_renderer_options);
-			landmarks_renderer.AttachTo(&seg_render);
-
-			// Video Display Unit
-			VideoDisplayOptions video_display_options;
-			video_display_options.stream_name = "RenderedRegionStream";
-			VideoDisplayUnit display(video_display_options);
-			display.AttachTo(&seg_render);
-
-			// Video Writer Unit
-			VideoWriter2Options writer_options;
-			writer_options.video_stream_name = "RenderedRegionStream";
-			VideoWriterUnit2 writer(writer_options, debug1_out_path);
-			if (!m_output_dir.empty())
-			{
-				writer.AttachTo(&display);
-			}
-			*/
-
 			// Prepare processing
 			if (!reader.PrepareProcessing())
 				throw std::runtime_error("Video framework setup failed.");
@@ -440,6 +408,7 @@ namespace segmentation
 				throw std::runtime_error("Could not process video file.");
 		}
 		std::cout << "End of first pass" << std::endl;
+		*/
 		/*
 		/// Debug ///
 		for each (auto region_stat in region_stats)
