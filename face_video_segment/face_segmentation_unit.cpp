@@ -97,6 +97,19 @@ namespace segmentation
 		if (landmarks[17].x < landmarks[0].x) full_face.push_back(landmarks[17]);
 	}
 
+	float getFaceDominantSide(const std::vector<cv::Point>& landmarks)
+	{
+		if (landmarks.size() != 68) return 0;
+
+		const cv::Point& center = landmarks[27];
+		const cv::Point& left_eye = landmarks[42];
+		const cv::Point& right_eye = landmarks[39];
+		float left_dist = cv::norm(center - left_eye);
+		float right_dist = cv::norm(center - right_eye);
+
+		return left_dist / (left_dist + right_dist);
+	}
+
 	FaceSegmentationUnit::FaceSegmentationUnit(const FaceSegmentationOptions& options)
 		: options_(options)
 	{
@@ -676,8 +689,19 @@ namespace segmentation
 
 		// Draw jaw
 		float jaw_width = cv::norm(landmarks[2] - landmarks[14]);
+		float side = getFaceDominantSide(landmarks);
+		std::cout << "side = " << side << std::endl;//
+		const float min_side = 0.3f, max_side = 0.7f;
+		side = std::max(std::min(side, max_side), min_side);
+		side = (side - min_side) / (max_side - min_side);
+		float right_ratio = std::max(side - 0.5f, 0.0f)*2.0f;
+		float left_ratio = std::min(side, 0.5f)*2.0f;
+		std::cout << "right_ratio = " << right_ratio << std::endl;//
+		std::cout << "left_ratio = " << left_ratio << std::endl;//
+		int right_ind = 3 + (int)std::round(right_ratio * 5);
+		int left_ind = 8 + (int)std::round(left_ratio * 5);
 		int jaw_thickness = (int)std::round(0.1f*jaw_width);
-		for (size_t i = 3; i <= 14; ++i)
+		for (size_t i = right_ind + 1; i <= left_ind; ++i)
 			cv::line(face_map, landmarks[i], landmarks[i - 1],
 				cv::Scalar(128, 128, 128), jaw_thickness);
 
@@ -793,10 +817,29 @@ namespace segmentation
 						if (in_face_ratio > 0.01f && out_face_ratio > 0.01f && (jaw_ratio > 0.05f && jaw_poly_ratio > 0.02f && jaw_poly_ratio < 0.5f))
 						{
 							// Found neck region
-							cv::drawContours(seg, contours, 0, cv::Scalar(128, 128, 128), CV_FILLED);
+							//cv::drawContours(seg, contours, 0, cv::Scalar(128, 128, 128), CV_FILLED);
+
 							//std::cout << "cos_a = " << cos_a << ", in_ratio = " << in_ratio << ", out_ratio = " << out_ratio << std::endl;
 //							std::cout << "jaw_ratio = " << jaw_ratio << ", in_ratio = " << in_ratio << ", out_ratio = " << out_ratio << std::endl;
 							//std::cout << "Found neck!" << std::endl;
+
+							// Fill intersection
+							unsigned char *face_map_data = face_map.data, *poly_map_data = poly_map.data;
+							unsigned char* seg_data = seg.data;
+							int pr, pc;
+							for (pr = 0; pr < face_map.rows; ++pr)
+							{
+								for (pc = 0; pc < face_map.cols; ++pc)
+								{
+									if (*poly_map_data++ > 0)
+									{
+										if (*face_map_data++ == 255)
+											*seg_data = 128;
+									}
+									else ++face_map_data;
+									++seg_data;
+								}
+							}
 						}
 						else if (in_ratio > 0.5f)
 							cv::drawContours(seg, contours, 0, cv::Scalar(255, 255, 255), CV_FILLED);
