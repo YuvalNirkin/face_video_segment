@@ -82,13 +82,13 @@ for i = indices
     end
        
     %% Face video segmentation
-    dstSegVideoFile = [vidName '_seg.mp4'];
-    dstSegVideoPath = fullfile(outputPath, dstSegVideoFile);
-    if(exist(dstSegVideoPath, 'file') == 2)
-        disp(['"' dstSegVideoFile '" already exists. Skipping face video segmentation.']);
+    vidOutDir = fullfile(outputPath, vidName);
+    if(exist(vidOutDir, 'dir') == 7)
+        disp(['"' vidName '" directory already exists. Skipping face video segmentation.']);
     else
-        disp(['Creating face video segmentation "' dstSegVideoFile '".']);
-        face_video_seg(vidFile, outputPath, dstLandmarksPath, dstSegTreePath, 'verbose', p.Results.verbose);
+        disp(['Creating face video segmentation in the directory "' vidName '".']);
+        mkdir(vidOutDir);
+        face_video_seg(vidFile, vidOutDir, dstLandmarksPath, dstSegTreePath, 'verbose', p.Results.verbose);
     end
 end
 

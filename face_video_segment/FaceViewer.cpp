@@ -30,6 +30,7 @@
 #include "landmarks_unit.h"
 #include "face_segmentation_unit.h"
 #include "video_writer_unit2.h"
+#include "keyframe_writer_unit.h"
 #include <video_framework/video_reader_unit.h>
 #include <video_framework/video_display_unit.h>
 #include <video_framework/video_writer_unit.h>
@@ -317,6 +318,8 @@ namespace segmentation
 
 	void FaceView::test3()
 	{
+		VideoUnit* input = nullptr;  // Updated throughout graph construction.
+
 		boost::filesystem::path orig = m_video_file;
 		std::string seg_out_path = (boost::filesystem::path(m_output_dir) /
 			(orig.stem() += "_seg.mp4")).string();
@@ -505,6 +508,7 @@ namespace segmentation
 			{
 				writer.AttachTo(&display);
 			}
+			input = &writer;
 
 			// Debug segmentation
 			std::unique_ptr<FaceSegmentationRendererUnit> face_seg_renderer_debug;
@@ -537,7 +541,15 @@ namespace segmentation
 				{
 					face_seg_writer_debug->AttachTo(face_seg_display_debug.get());
 				}
+				input = face_seg_writer_debug.get();
 			}
+
+			// Keyframe writer
+			KeyframeWriterOptions keyframe_writer_options;
+			KeyframeWriter keyframe_writer(keyframe_writer_options, m_output_dir,
+				orig.stem().string());
+			if (!m_output_dir.empty())
+				keyframe_writer.AttachTo(input);
 
 			// Prepare processing
 			if (!reader.PrepareProcessing())
