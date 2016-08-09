@@ -321,8 +321,8 @@ namespace segmentation
 		VideoUnit* input = nullptr;  // Updated throughout graph construction.
 
 		boost::filesystem::path orig = m_video_file;
-		std::string seg_out_path = (boost::filesystem::path(m_output_dir) /
-			(orig.stem() += "_seg.mp4")).string();
+//		std::string seg_out_path = (boost::filesystem::path(m_output_dir) /
+//			(orig.stem() += "_seg.mp4")).string();
 		std::string debug1_out_path = (boost::filesystem::path(m_output_dir) /
 			(orig.stem() += "_debug1.mp4")).string();
 		std::string debug2_out_path = (boost::filesystem::path(m_output_dir) /
@@ -493,7 +493,8 @@ namespace segmentation
 			face_seg_renderer_options.face_segment_stream_name = face_seg_local_options.stream_name;
 			FaceSegmentationRendererUnit face_seg_renderer(face_seg_renderer_options, region_stats);
 			face_seg_renderer.AttachTo(&face_seg_local);
-
+            input = &face_seg_local;
+            /*
 			// Video Display Unit
 			VideoDisplayOptions video_display_options;
 			video_display_options.stream_name = face_seg_renderer_options.stream_name;
@@ -509,6 +510,7 @@ namespace segmentation
 				writer.AttachTo(&display);
 			}
 			input = &writer;
+            */
 
 			// Debug segmentation
 			std::unique_ptr<FaceSegmentationRendererUnit> face_seg_renderer_debug;
@@ -523,7 +525,7 @@ namespace segmentation
 				face_seg_renderer_options.debug = true;
 				face_seg_renderer_debug.reset(
 					new FaceSegmentationRendererUnit(face_seg_renderer_options));
-				face_seg_renderer_debug->AttachTo(&writer);
+				face_seg_renderer_debug->AttachTo(input);
 
 				// Video Display Unit
 				VideoDisplayOptions video_display_options;

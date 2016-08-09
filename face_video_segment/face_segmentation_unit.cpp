@@ -66,7 +66,7 @@ namespace segmentation
 
 		//cv::Point dir = (landmarks[27] - landmarks[34]);	// Why 34??
 		cv::Point dir = (landmarks[27] - landmarks[30]);
-		dir.x = -dir.x;	// Invert dx
+		//dir.x = -dir.x;	// Invert dx
 
 		// Jaw line
 		full_face = {
@@ -1019,8 +1019,16 @@ namespace segmentation
 			
 			renderSegmentation(out_frame, face_seg_data.seg);
 			renderBoundaries(out_frame, seg_desc);
+            std::vector<std::vector<cv::Point>> full_face(1);
+            createFullFace(landmarks, full_face.back());
+            cv::drawContours(out_frame, full_face, 0, cv::Scalar(47, 255, 173), 1);
 			sfl::render(out_frame, landmarks);
-			
+			/*
+			// Show overlay
+			std::string msg = "Frame count: " + std::to_string(frame_counter_);
+			cv::putText(out_frame, msg, cv::Point(15, 15),
+				cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 102, 255), 1, CV_AA);
+                */
 		}
 		else
 		{

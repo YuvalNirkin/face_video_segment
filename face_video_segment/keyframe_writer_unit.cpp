@@ -38,7 +38,7 @@
 using namespace video_framework;
 
 const float MAX_DIST = 0.5f*sqrt(3.0f)*CV_PI;
-const float MIN_DIST = MAX_DIST / 10.0f;
+const float MIN_DIST = MAX_DIST / 20.0f;
 const float MAX_FACE_ANGLE = 75.0f;
 
 cv::Point2f getLeftEye(const std::vector<cv::Point>& landmarks)
@@ -278,7 +278,7 @@ namespace segmentation
 				}
 
 				// Output frame and segmentation
-				cv::imwrite(str(boost::format("%s\\%s_frame_%04d.png") %
+				cv::imwrite(str(boost::format("%s\\%s_frame_%04d.jpg") %
 					output_dir_ % src_name_ % frame_number_), frame_cropped);
 				cv::imwrite(str(boost::format("%s\\%s_seg_%04d.png") %
 					output_dir_ % src_name_ % frame_number_), seg_cropped);
