@@ -208,6 +208,8 @@ namespace segmentation
 
 		void renderSegmentation(cv::Mat& frame, const cv::Mat& seg, const cv::Scalar& color);
 
+        void renderSegmentation(cv::Mat& frame, const cv::Mat& seg, uchar color);
+
 		void renderBoundaries(cv::Mat& frame, const SegmentationDesc& seg_desc);
 
 		void renderRegions(cv::Mat& frame, const SegmentationDesc& seg_desc);

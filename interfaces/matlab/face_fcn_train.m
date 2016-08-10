@@ -69,5 +69,39 @@ else
   save(opts.imdbStatsPath, '-struct', 'stats') ;
 end
 
+%% Setup model
+% Get initial model from VGG-VD-16
+net = fcnInitializeModel('sourceModelPath', opts.sourceModelPath) ;
+if any(strcmp(opts.modelType, {'fcn16s', 'fcn8s'}))
+  % upgrade model to FCN16s
+  net = fcnInitializeModel16s(net) ;
+end
+if strcmp(opts.modelType, 'fcn8s')
+  % upgrade model fto FCN8s
+  net = fcnInitializeModel8s(net) ;
+end
+net.meta.normalization.rgbMean = stats.rgbMean ;
+net.meta.classes = imdb.classes.name ;
+
+%% Train
+% Setup data fetching options
+bopts.numThreads = opts.numFetchThreads ;
+bopts.labelStride = 1 ;
+bopts.labelOffset = 1 ;
+bopts.classWeights = ones(1,21,'single') ;
+bopts.rgbMean = stats.rgbMean ;
+bopts.useGpu = numel(opts.train.gpus) > 0 ;
+
+% Launch SGD
+info = cnn_train_dag(net, imdb, getBatchWrapper(bopts), ...
+                     trainOpts, ....
+                     'train', train, ...
+                     'val', val, ...
+                     opts.train) ;
+
+end
+
+function fn = getBatchWrapper(opts)
+    fn = @(imdb,batch) getBatch(imdb,batch,opts,'prefetch',nargout==0);
 end
 

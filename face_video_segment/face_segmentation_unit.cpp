@@ -1001,12 +1001,11 @@ namespace segmentation
 		const std::vector<cv::Point>& landmarks = landmarks_frame.Ref();
 
 		// Allocate new output frame.
-		VideoFrame* render_frame =
-			new VideoFrame(frame_width_,
-				frame_height_,
-				3,
-				frame_width_step_,
-				pts);
+        VideoFrame* render_frame = nullptr;
+        if (options_.debug) render_frame = new VideoFrame(frame_width_, frame_height_,
+                3, 0, pts);
+        else render_frame = new VideoFrame(frame_width_, frame_height_,
+            1, 0, pts);
 
 		cv::Mat out_frame;
 		render_frame->MatView(&out_frame);
@@ -1032,8 +1031,9 @@ namespace segmentation
 		}
 		else
 		{
-			// Render segmentation in the color pink
-			renderSegmentation(out_frame, face_seg_data.seg, cv::Scalar(128, 128, 192));
+			// Render segmentation by class id (15)
+            renderSegmentation(out_frame, face_seg_data.seg, 15);
+			//renderSegmentation(out_frame, face_seg_data.seg, cv::Scalar(128, 128, 192));
 		}
 
 		// renderSelectedRegions(image, seg_desc, face_seg_data.region_ids);
@@ -1131,6 +1131,24 @@ namespace segmentation
 			}
 		}
 	}
+
+    void FaceSegmentationRendererUnit::renderSegmentation(cv::Mat& frame, const cv::Mat& seg,
+        uchar color)
+    {
+        int r, c;
+        unsigned char* frame_data = frame.data;
+        const unsigned char* seg_data = seg.data;
+        for (r = 0; r < frame.rows; ++r)
+        {
+            seg_data = seg.ptr<uchar>(r);
+            frame_data = frame.ptr<uchar>(r);
+            for (c = 0; c < frame.cols; ++c)
+            {
+                if (*seg_data++ > 0) *frame_data = color;
+                ++frame_data;
+            }
+        }
+    }
 
 	void FaceSegmentationRendererUnit::renderBoundaries(cv::Mat& frame,
 		const SegmentationDesc& seg_desc)
