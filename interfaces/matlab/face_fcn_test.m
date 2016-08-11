@@ -10,7 +10,7 @@ addpath 'D:\Dev\Matlab\Shared\matconvnet-fcn'
 opts.expDir = 'D:\Dev\Matlab\Shared\matconvnet-fcn\data\face_seg\fcn32s' ;
 %opts.dataDir = 'D:\Dev\Matlab\Shared\matconvnet-fcn\data\voc11';
 opts.dataDir = 'D:\Dev\Matlab\Shared\matconvnet-fcn\data\face_seg\face_seg_db';
-opts.modelPath = 'D:\Dev\Matlab\Shared\matconvnet-fcn\data\face_seg\fcn32s\net-epoch-4.mat'
+opts.modelPath = 'D:\Dev\Matlab\Shared\matconvnet-fcn\data\face_seg\fcn32s\net-epoch-8.mat'
 opts.modelFamily = 'matconvnet' ;
 [opts, varargin] = vl_argparse(opts, varargin) ;
 
@@ -66,8 +66,8 @@ val = find(imdb.images.set == 2 & imdb.images.segmentation) ;
 % valNames_ = textread('data/seg12valid-tvg.txt', '%s') ;
 % assert(isequal(valNames, valNames_)) ;
 
-imdb.paths.image = strrep(imdb.paths.image,'\','/');%
-imdb.paths.classSegmentation = strrep(imdb.paths.classSegmentation,'\','/');%
+%imdb.paths.image = strrep(imdb.paths.image,'\','/');%
+%imdb.paths.classSegmentation = strrep(imdb.paths.classSegmentation,'\','/');%
 
 % -------------------------------------------------------------------------
 % Setup model

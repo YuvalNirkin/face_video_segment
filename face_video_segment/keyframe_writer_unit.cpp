@@ -27,6 +27,7 @@
 // ---
 
 #include "keyframe_writer_unit.h"
+#include "face_segmentation_unit.h"
 
 #include "base/base_impl.h"
 
@@ -201,6 +202,14 @@ namespace segmentation
 			return false;
 		}
 
+        // Get face segmentation stream.
+        face_seg_stream_idx_ = FindStreamIdx(options_.face_segment_stream_name, set);
+        if (face_seg_stream_idx_ < 0) {
+            LOG(ERROR) << "SegmentationRenderUnit::OpenStreams: "
+                << "Could not find face segmentation stream!\n";
+            return false;
+        }
+
 		// Find face segmentation renderer stream idx.
 		face_segment_renderer_stream_idx_ = FindStreamIdx(options_.face_segment_renderer_stream_name, set);
 
@@ -231,29 +240,44 @@ namespace segmentation
 
 		const std::vector<cv::Point>& landmarks = landmarks_frame.Ref();
 
+        // Retrieve local face segmentation data
+        const FaceSegLocalOutput& face_seg_data =
+            static_cast<PointerFrame<FaceSegLocalOutput>*>(input->at(face_seg_stream_idx_).get())->Ref();
+
 		// Retrieve face segmentation renderer frame
 		const VideoFrame* seg_frame = input->at(face_segment_renderer_stream_idx_)->AsPtr<VideoFrame>();
-		cv::Mat seg;
-		seg_frame->MatView(&seg);
+		cv::Mat seg_render;
+		seg_frame->MatView(&seg_render);
 
 		// Process frame
 		bool add_keyframe = true;
-		if (!landmarks.empty())
-		{
-			cv::Point3f face_euler = getFaceApproxEulerAngles(landmarks);
 
-			// Compare against previous keyframes
-			for (Keyframe& kf : keyframes_)
-			{
-				float d = cv::norm(face_euler - kf.euler_angles);
-				std::cout << "dist to kf " << kf.id << " = " << d << std::endl;
-				if (d < MIN_DIST)
-				{
-					add_keyframe = false;
-					break;
-				}
-			}
-		
+        // Check history
+        if (landmarks.empty()) history_.clear();
+        else
+		{
+            cv::Point3f face_euler = getFaceApproxEulerAngles(landmarks);
+
+            if (history_.size() < options_.stability_range)
+            {
+                history_.push_back(landmarks);
+                add_keyframe = false;
+            }
+            else
+            {
+                // Compare against previous keyframes
+                for (Keyframe& kf : keyframes_)
+                {
+                    float d = cv::norm(face_euler - kf.euler_angles);
+                    std::cout << "dist to kf " << kf.id << " = " << d << std::endl;
+                    if (d < MIN_DIST)
+                    {
+                        add_keyframe = false;
+                        break;
+                    }
+                }
+            }
+
 			if (add_keyframe)
 			{
 				// Add keyframe
@@ -263,7 +287,14 @@ namespace segmentation
 				// Crop frame and segmentation
 				cv::Rect bbox = createBBoxFromLandmarks(landmarks, frame.size(), true);
 				cv::Mat frame_cropped = frame(bbox);
-				cv::Mat seg_cropped = seg(bbox);
+				cv::Mat seg_render_cropped = seg_render(bbox);
+                cv::Mat seg, seg_cropped;
+                if (options_.debug)
+                {
+                    seg = frame.clone();
+                    renderSegmentation(seg, face_seg_data.seg);
+                    seg_cropped = seg(bbox);
+                }
 				
 				// Limit resolution
 				cv::MatSize size = frame_cropped.size;
@@ -274,14 +305,18 @@ namespace segmentation
 					int w = (int)std::round(frame_cropped.cols * scale);
 					int h = (int)std::round(frame_cropped.rows * scale);
 					cv::resize(frame_cropped, frame_cropped, cv::Size(w, h));
-					cv::resize(seg_cropped, seg_cropped, cv::Size(w, h));
+					cv::resize(seg_render_cropped, seg_render_cropped, cv::Size(w, h));
+                    if (options_.debug) cv::resize(seg_cropped, seg_cropped, cv::Size(w, h));
 				}
 
 				// Output frame and segmentation
 				cv::imwrite(str(boost::format("%s\\%s_frame_%04d.jpg") %
 					output_dir_ % src_name_ % frame_number_), frame_cropped);
 				cv::imwrite(str(boost::format("%s\\%s_seg_%04d.png") %
-					output_dir_ % src_name_ % frame_number_), seg_cropped);
+					output_dir_ % src_name_ % frame_number_), seg_render_cropped);
+                if (options_.debug)
+                    cv::imwrite(str(boost::format("%s\\%s_debug_%04d.jpg") %
+                        output_dir_ % src_name_ % frame_number_), seg_cropped);
 			}
 		}
 
@@ -294,5 +329,29 @@ namespace segmentation
 	{
 		return false;
 	}
+
+    void KeyframeWriter::renderSegmentation(cv::Mat& frame, const cv::Mat& seg)
+    {
+        int r, c;
+        const float a = 0.5f;
+        cv::Point3_<uchar>* frame_data = (cv::Point3_<uchar>*)frame.data;
+        unsigned char* seg_data = seg.data;
+        unsigned char s;
+        for (r = 0; r < frame.rows; ++r)
+        {
+            for (c = 0; c < frame.cols; ++c)
+            {
+                //a = *seg_data++ / 255.0f;
+                s = *seg_data++;
+                if (s > 0)
+                {
+                    frame_data->x = (unsigned char)std::round(0 * a + frame_data->x*(1 - a));
+                    frame_data->y = (unsigned char)std::round(0 * a + frame_data->y*(1 - a));
+                    frame_data->z = (unsigned char)std::round(255 * a + frame_data->z*(1 - a));
+                }
+                ++frame_data;
+            }
+        }
+    }
 
 }  // namespace video_framework.

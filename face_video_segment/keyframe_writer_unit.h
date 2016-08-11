@@ -40,8 +40,11 @@ namespace segmentation {
 		std::string video_stream_name = "VideoStream";
 		std::string segment_stream_name = "SegmentationStream";
 		std::string landmarks_stream_name = "LandmarksStream";
+        std::string face_segment_stream_name = "FaceSegmentationStream";
 		std::string face_segment_renderer_stream_name = "FaceSegmentationRendererStream";
 		int start_frame = 10;
+        int stability_range = 5;
+        bool debug = false;
 	};
 
 	struct Keyframe
@@ -64,6 +67,9 @@ namespace segmentation {
 		virtual void ProcessFrame(video_framework::FrameSetPtr input, std::list<video_framework::FrameSetPtr>* output);
 		virtual bool PostProcess(std::list<video_framework::FrameSetPtr>* append);
 
+    private:
+        void renderSegmentation(cv::Mat& frame, const cv::Mat& seg);
+
 	private:
 		KeyframeWriterOptions options_;
 		std::string output_dir_;
@@ -71,11 +77,13 @@ namespace segmentation {
 
 		int video_stream_idx_;
 		int landmarks_stream_idx_;
+        int face_seg_stream_idx_;
 		int face_segment_renderer_stream_idx_;
 
 		int frame_number_ = 0;
 
 		std::list<Keyframe> keyframes_;
+        std::list<std::vector<cv::Point>> history_;
 	};
 
 }  // namespace segmentation

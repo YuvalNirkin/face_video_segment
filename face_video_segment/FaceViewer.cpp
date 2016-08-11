@@ -548,6 +548,8 @@ namespace segmentation
 
 			// Keyframe writer
 			KeyframeWriterOptions keyframe_writer_options;
+            keyframe_writer_options.face_segment_stream_name = face_seg_local_options.stream_name;
+            keyframe_writer_options.debug = m_verbose > 1;
 			KeyframeWriter keyframe_writer(keyframe_writer_options, m_output_dir,
 				orig.stem().string());
 			if (!m_output_dir.empty())
