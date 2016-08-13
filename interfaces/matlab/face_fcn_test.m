@@ -10,7 +10,7 @@ addpath 'D:\Dev\Matlab\Shared\matconvnet-fcn'
 opts.expDir = 'D:\Dev\Matlab\Shared\matconvnet-fcn\data\face_seg\fcn32s' ;
 %opts.dataDir = 'D:\Dev\Matlab\Shared\matconvnet-fcn\data\voc11';
 opts.dataDir = 'D:\Dev\Matlab\Shared\matconvnet-fcn\data\face_seg\face_seg_db';
-opts.modelPath = 'D:\Dev\Matlab\Shared\matconvnet-fcn\data\face_seg\fcn32s\net-epoch-8.mat'
+opts.modelPath = 'D:\Dev\Matlab\Shared\matconvnet-fcn\data\face_seg\fcn32s\net-epoch-32.mat'
 opts.modelFamily = 'matconvnet' ;
 [opts, varargin] = vl_argparse(opts, varargin) ;
 
@@ -158,7 +158,8 @@ for i = 1:numel(val)
   confusion = confusion + accumarray([lb(ok),pred(ok)],1,[21 21]) ;
 
   % Plots
-  if mod(i - 1,30) == 0 || i == numel(val)
+%  if mod(i - 1,30) == 0 || i == numel(val)
+   if mod(i - 1,1) == 0 || i == numel(val)
     clear info ;
     [info.iu, info.miu, info.pacc, info.macc] = getAccuracies(confusion) ;
     fprintf('IU ') ;

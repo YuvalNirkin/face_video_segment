@@ -62,6 +62,10 @@ for i = indices
     process_files(segmentations, dirPath, segmentationsPath);
     
     %% Add images to training and valuation sets
+    [train_ind, val_ind] = calc_set_indices(length(dstNames), 0.1, 2, 1);
+    train = [train; dstNames(train_ind)];
+    val = [val; dstNames(val_ind)];
+    %{
     if(length(dstNames) > 2)
         val_ind = floor((length(dstNames) + 1)/2);
         train = [train; dstNames(1:val_ind-1); dstNames(val_ind+1:end)];
@@ -69,6 +73,7 @@ for i = indices
     else
         train = [train; dstNames];
     end
+    %}
 end
 
 %% Write training and valuation sets to files
@@ -131,5 +136,21 @@ function cmap = labelColors()
       cmap(i,1)=r; cmap(i,2)=g; cmap(i,3)=b;
     end
     cmap = cmap / 255;
+end
+
+function [train_ind, val_ind] = calc_set_indices(n, val_ratio,...
+    min_train_size, min_val_size)
+    if(n <= min_train_size)
+        train_ind = 1:n;
+        val_ind = [];
+    else
+        val_size = round(n*val_ratio);
+        if(val_size < min_val_size)
+            val_size = min(min_val_size, n);
+        end
+        step = round(n/(val_size + 1));
+        val_ind = step:step:min(val_size*step, n);
+        train_ind = setdiff(1:n, val_ind);
+    end
 end
 
