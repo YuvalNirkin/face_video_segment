@@ -97,7 +97,7 @@ for i = indices
     else
         disp(['Creating face video segmentation in the directory "' vidName '".']);
         mkdir(vidOutDir);
-        face_video_seg(vidFile, vidOutDir, dstLandmarksPath, dstSegTreePath, 'verbose', p.Results.verbose);
+        fvs_local(vidFile, vidOutDir, dstLandmarksPath, dstSegTreePath, 'verbose', p.Results.verbose);
     end
 end
 

@@ -4,7 +4,7 @@ project(face_video_segment)
 # Version
 # ===================================================
 set(FACE_VIDEO_SEGMENT_MAJOR_VERSION 0)
-set(FACE_VIDEO_SEGMENT_MINOR_VERSION 5)
+set(FACE_VIDEO_SEGMENT_MINOR_VERSION 7)
 set(FACE_VIDEO_SEGMENT_VERSION ${FACE_VIDEO_SEGMENT_MAJOR_VERSION}.${FACE_VIDEO_SEGMENT_MINOR_VERSION})
 
 # Global configurations
@@ -47,6 +47,7 @@ find_package(find_face_landmarks REQUIRED)
 # ===================================================
 
 add_subdirectory(face_video_segment)
+add_subdirectory(fvs_local)
 
 # interfaces
 if(BUILD_INTERFACE_MATLAB)
