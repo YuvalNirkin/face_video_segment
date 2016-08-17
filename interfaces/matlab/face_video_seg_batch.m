@@ -10,6 +10,8 @@ addRequired(p, 'landmarks', @ischar);
 addParameter(p, 'indices', [], @isvector);
 addParameter(p, 'minWidth', 0, @isscalar);
 addParameter(p, 'minHeight', 0, @isscalar);
+addParameter(p, 'maxScaleWidth', 0, @isscalar);
+addParameter(p, 'maxScaleHeight', 0, @isscalar);
 addParameter(p, 'verbose', 0, @isscalar);
 parse(p,varargin{:});
 indices = p.Results.indices;
@@ -45,8 +47,9 @@ for i = indices
     disp(['Processing "', [vidName vidExt], '"']);
     
     %% Check resolution
+    vid = VideoReader(vidFile);
     if(p.Results.minWidth > 0 && p.Results.minHeight > 0)
-        vid = VideoReader(vidFile);
+        %vid = VideoReader(vidFile);
         if(vid.Width < p.Results.minWidth || vid.Height < p.Results.minHeight)
             disp(['Skipping "', [vidName vidExt], '" because of low resolution']);
             continue;
@@ -78,7 +81,13 @@ for i = indices
         copyfile(dstLandmarksPath2, dstLandmarksPath);
     else
         disp(['Creating landmarks cache "' dstLandmarksFile '".']);
-        cache_face_landmarks(vidFile, p.Results.landmarks, 'output', dstLandmarksPath, 'scales', 1:2, 'track', 1);
+        if((p.Results.maxScaleWidth > 0 && (vid.Width*2) > p.Results.maxScaleWidth) ||...
+            (p.Results.maxScaleHeight > 0 && (vid.Height*2) > p.Results.maxScaleHeight))
+            scales = 1;
+        else
+            scales = 1:2;
+        end
+        cache_face_landmarks(vidFile, p.Results.landmarks, 'output', dstLandmarksPath, 'scales', scales, 'track', 1);
     end
        
     %% Face video segmentation
