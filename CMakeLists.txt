@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.8)
+cmake_minimum_required(VERSION 3.0.2)
 project(face_video_segment)
 
 # Version
@@ -40,6 +40,7 @@ endif()
 find_package(OpenCV REQUIRED highgui imgproc imgcodecs)
 find_package(dlib REQUIRED)
 find_package(glog REQUIRED)
+find_package(Qt5Widgets REQUIRED)
 find_package(video_segment REQUIRED)
 find_package(find_face_landmarks REQUIRED)
 
@@ -48,6 +49,7 @@ find_package(find_face_landmarks REQUIRED)
 
 add_subdirectory(face_video_segment)
 add_subdirectory(fvs_local)
+add_subdirectory(fvs_editor)
 
 # interfaces
 if(BUILD_INTERFACE_MATLAB)
