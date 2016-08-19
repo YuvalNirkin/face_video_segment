@@ -73,6 +73,7 @@ namespace fvs
     protected:
         bool event(QEvent *event) Q_DECL_OVERRIDE;
         bool eventFilter(QObject * object, QEvent * event) Q_DECL_OVERRIDE;
+        void keyPressEvent(QKeyEvent* event) Q_DECL_OVERRIDE;
 
         void update();
         void updateLater();
@@ -98,16 +99,24 @@ namespace fvs
         bool m_update_pending;
 
         int m_curr_frame_ind;
-        int m_curr_slider_level;
-        int m_max_slider_level;  
+        int m_curr_hierarchy_level;
+        int m_max_hierarchy_level;
 
+        // video
         std::unique_ptr<cv::VideoCapture> m_cap;
         std::unique_ptr<cv::Mat> m_scaled_frame;
         std::unique_ptr<QImage> m_render_image;
+
+        // sfl
         std::shared_ptr<sfl::SequenceFaceLandmarks> m_sfl;
         std::vector<sfl::Frame*> m_sfl_frames;
+        int m_main_face_id;
+
+        // segmentation
         std::unique_ptr<segmentation::SegmentationReader> m_seg_reader;
-        std::unique_ptr<segmentation::SegmentationDesc> m_seg_desc;  
+        std::unique_ptr<segmentation::SegmentationDesc> m_seg_desc;
+        std::unique_ptr<segmentation::SegmentationDesc> m_seg_hierarchy;
+        int m_hierarchy_pos;
 
         int m_frame_width, m_frame_height;
         double m_fps;

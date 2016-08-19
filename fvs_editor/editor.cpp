@@ -62,7 +62,9 @@ namespace fvs
         m_curr_frame_ind(0),
         m_frame_width(0), m_frame_height(0),
         m_fps(0),
-        m_total_frames(0)
+        m_total_frames(0),
+        m_main_face_id(0),
+        m_hierarchy_pos(0)
     {
         // Initialize video capture
         m_cap.reset(new cv::VideoCapture());
@@ -88,6 +90,7 @@ namespace fvs
             throw std::runtime_error(
                 "The number of landmark frames does not match the number of video frames!");
         const std::list<std::unique_ptr<sfl::Frame>>& sfl_frames_list =  m_sfl->getSequence();
+        m_main_face_id = sfl::getMainFaceID(sfl_frames_list);
         m_sfl_frames.reserve(sfl_frames_list.size());
         for (auto& frame : sfl_frames_list)
             m_sfl_frames.push_back(frame.get());  
@@ -97,11 +100,13 @@ namespace fvs
         if (!m_seg_reader->OpenFileAndReadHeaders())
             throw std::runtime_error("Failed to read segmentation file!");
         m_seg_desc.reset(new segmentation::SegmentationDesc);
+        m_seg_hierarchy.reset(new segmentation::SegmentationDesc);
+        m_seg_reader->ReadNextFrame(m_seg_hierarchy.get());
 
         // Create main widget
         m_main_widget = new QLabel(this);
         setCentralWidget(m_main_widget);
-        setWindowTitle("Face Video Segment Editor");
+        setWindowTitle("Face Video Segmentation Editor");
 
         // Create simple widget used for display.
         m_display_widget = new QLabel(this);
@@ -119,13 +124,13 @@ namespace fvs
         connect(m_frame_slider, SIGNAL(sliderReleased()), this, SLOT(frameSliderRelease()));
 
         // Hierarchy level slider.
-        m_max_slider_level = 20;
-        m_curr_slider_level = 0;
+        m_max_hierarchy_level = 20;
+        m_curr_hierarchy_level = 0;
         m_hierarchy_slider = new QSlider(Qt::Horizontal);
         m_hierarchy_slider->setMinimum(0);
-        m_hierarchy_slider->setMaximum(m_max_slider_level);
+        m_hierarchy_slider->setMaximum(m_max_hierarchy_level);
         m_hierarchy_slider->setTickPosition(QSlider::TicksBelow);
-        m_hierarchy_slider->setValue(m_curr_slider_level);
+        m_hierarchy_slider->setValue(m_curr_hierarchy_level);
         //connect(m_hierarchy_slider, SIGNAL(sliderMoved(int)), this, SLOT(ChangeLevel(int)));
         connect(m_hierarchy_slider, SIGNAL(valueChanged(int)), this, SLOT(hierarchyLevelChanged(int)));
 
@@ -179,12 +184,28 @@ namespace fvs
         {
             QMouseEvent *mouseEvent = static_cast<QMouseEvent*>(event);
             QPoint pos = mouseEvent->pos();
-            std::cout << "pos = (" << pos.x() << ", " << pos.y() << ")" << std::endl;
+            std::cout << "pos = (" << pos.x() << ", " << pos.y() << ")" << std::endl;//
+            int id = segmentation::GetOversegmentedRegionIdFromPoint(pos.x(), pos.y(), *m_seg_desc);//
+            int parent_id = segmentation::GetParentId(id, 0, m_curr_hierarchy_level, m_seg_hierarchy->hierarchy());
+            std::cout << "oversegmented region id = " << id << std::endl;
+            std::cout << "parent region id = " << parent_id << std::endl;
             return true;
         }
         return false;
 
         //return QMainWindow::eventFilter(object, event);
+    }
+
+    void Editor::keyPressEvent(QKeyEvent * event)
+    {
+        switch (event->key())
+        {
+        case Qt::Key_Escape:
+            close(); break;
+        case Qt::Key_Space:
+            pause(m_loop); break;
+        default: break;
+        }
     }
 
     void Editor::update()
@@ -196,6 +217,19 @@ namespace fvs
         //std::cout << "(" << m_curr_frame_ind << ", " << m_total_frames - 1 << ")" << std::endl;
         if (m_curr_frame_ind < m_total_frames && m_cap->read(*m_scaled_frame))
         {
+            // Update segmentation
+            m_seg_reader->SeekToFrame(m_curr_frame_ind);
+            m_seg_reader->ReadNextFrame(m_seg_desc.get());
+
+            // Update hierarchy if necessary.
+            if (m_hierarchy_pos != m_seg_desc->hierarchy_frame_idx()) {
+                m_hierarchy_pos = m_seg_desc->hierarchy_frame_idx();
+                m_seg_reader->SeekToFrame(m_hierarchy_pos);
+                m_seg_reader->ReadNextFrame(m_seg_hierarchy.get());
+                //std::cout << "hierarchy size = " << m_seg_hierarchy->hierarchy_size() << std::endl;//
+            }
+
+            // Render
             render(*m_scaled_frame);
             m_display_widget->setPixmap(QPixmap::fromImage(m_render_image->rgbSwapped()));
             m_display_widget->update();
@@ -223,11 +257,23 @@ namespace fvs
     {
         m_loop = !pause;
         m_refresh = m_loop;
+        if (m_loop) updateLater();
     }
 
     void Editor::render(cv::Mat& frame)
     {
-        sfl::render(frame, *m_sfl_frames[m_curr_frame_ind]);
+        // Render segmentation at specified level.
+        segmentation::RenderRegionsRandomColor(m_curr_hierarchy_level,
+            true,
+            false,
+            *m_seg_desc,
+            &m_seg_hierarchy->hierarchy(),
+            &frame);
+
+        // Render landmarks
+        const sfl::Face* main_face = m_sfl_frames[m_curr_frame_ind]->getFace(m_main_face_id);
+        if(main_face != nullptr)
+            sfl::render(frame, main_face->landmarks);
     }
 
     void Editor::frameIndexChanged(int n)
@@ -238,8 +284,9 @@ namespace fvs
     }  
 
     void Editor::hierarchyLevelChanged(int n) {
-        m_curr_slider_level = n;
-        m_hierarchy_slider->setValue(m_curr_slider_level);
+        m_curr_hierarchy_level = n;
+        m_hierarchy_slider->setValue(m_curr_hierarchy_level);
+        m_refresh = true;
     }
 
     void Editor::frameSliderPress()
