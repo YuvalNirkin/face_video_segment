@@ -97,8 +97,10 @@ namespace fvs
         bool m_refresh;
         bool m_slider_pause;
         bool m_update_pending;
+        bool m_update_frame;
 
         int m_curr_frame_ind;
+        int m_next_frame_ind;
         int m_curr_hierarchy_level;
         int m_max_hierarchy_level;
 

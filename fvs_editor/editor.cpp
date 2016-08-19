@@ -59,7 +59,9 @@ namespace fvs
         m_refresh(true),
         m_slider_pause(false),
         m_update_pending(false),
+        m_update_frame(true),
         m_curr_frame_ind(0),
+        m_next_frame_ind(-1),
         m_frame_width(0), m_frame_height(0),
         m_fps(0),
         m_total_frames(0),
@@ -189,6 +191,23 @@ namespace fvs
             int parent_id = segmentation::GetParentId(id, 0, m_curr_hierarchy_level, m_seg_hierarchy->hierarchy());
             std::cout << "oversegmented region id = " << id << std::endl;
             std::cout << "parent region id = " << parent_id << std::endl;
+
+            // Get children
+            segmentation::ParentMap parentMap;
+            segmentation::GetParentMap(m_curr_hierarchy_level, *m_seg_desc, m_seg_hierarchy->hierarchy(), &parentMap);
+            std::cout << "children ids = ";
+            for(auto& r : parentMap[parent_id])
+                std::cout << r->id() << ", ";
+            std::cout << std::endl;
+            /*
+            std::vector<int> children_ids;
+            segmentation::GetChildrenIds(parent_id, m_curr_hierarchy_level, 0, m_seg_hierarchy->hierarchy(), &children_ids);
+            std::cout << "children ids = ";
+            for (int child_id : children_ids)
+                std::cout << child_id << ", ";
+            std::cout << std::endl;
+            */
+
             return true;
         }
         return false;
@@ -210,33 +229,44 @@ namespace fvs
 
     void Editor::update()
     {
-        if (!m_refresh) return;
+        //if (!m_refresh) return;
         //std::cout << "update" << std::endl;
-        m_curr_frame_ind = (int)m_cap->get(cv::CAP_PROP_POS_FRAMES);
-        m_frame_slider->setValue(m_curr_frame_ind);
         //std::cout << "(" << m_curr_frame_ind << ", " << m_total_frames - 1 << ")" << std::endl;
-        if (m_curr_frame_ind < m_total_frames && m_cap->read(*m_scaled_frame))
+
+        if (m_update_frame)
         {
-            // Update segmentation
-            m_seg_reader->SeekToFrame(m_curr_frame_ind);
-            m_seg_reader->ReadNextFrame(m_seg_desc.get());
+            m_curr_frame_ind = (int)m_cap->get(cv::CAP_PROP_POS_FRAMES);
+            m_frame_slider->setValue(m_curr_frame_ind);
+            if (m_curr_frame_ind >= m_total_frames) pause(true);
+            else if (m_cap->read(*m_scaled_frame))
+            {
+                // Update segmentation
+                m_seg_reader->SeekToFrame(m_curr_frame_ind);
+                m_seg_reader->ReadNextFrame(m_seg_desc.get());
 
-            // Update hierarchy if necessary.
-            if (m_hierarchy_pos != m_seg_desc->hierarchy_frame_idx()) {
-                m_hierarchy_pos = m_seg_desc->hierarchy_frame_idx();
-                m_seg_reader->SeekToFrame(m_hierarchy_pos);
-                m_seg_reader->ReadNextFrame(m_seg_hierarchy.get());
-                //std::cout << "hierarchy size = " << m_seg_hierarchy->hierarchy_size() << std::endl;//
+                // Update hierarchy if necessary.
+                if (m_hierarchy_pos != m_seg_desc->hierarchy_frame_idx()) {
+                    m_hierarchy_pos = m_seg_desc->hierarchy_frame_idx();
+                    m_seg_reader->SeekToFrame(m_hierarchy_pos);
+                    m_seg_reader->ReadNextFrame(m_seg_hierarchy.get());
+                    //std::cout << "hierarchy size = " << m_seg_hierarchy->hierarchy_size() << std::endl;//
+                }
+
+                m_refresh = true;
+                m_update_frame = m_loop;
             }
+        }
 
-            // Render
+        // Render
+        if (m_refresh)
+        {
             render(*m_scaled_frame);
             m_display_widget->setPixmap(QPixmap::fromImage(m_render_image->rgbSwapped()));
             m_display_widget->update();
-            if (m_loop) updateLater();
-            else m_refresh = false;
         }
-        else pause(true);
+        
+        if (m_loop) updateLater();
+        //else m_refresh = false;
     }
 
     void Editor::updateLater()
@@ -250,13 +280,13 @@ namespace fvs
     void Editor::seek(int index)
     {
         m_cap->set(cv::CAP_PROP_POS_FRAMES, (double)index);
-        m_refresh = true;
+        m_update_frame = true;
     }
 
     void Editor::pause(bool pause)
     {
         m_loop = !pause;
-        m_refresh = m_loop;
+        m_update_frame = m_refresh = m_loop;
         if (m_loop) updateLater();
     }
 
@@ -291,14 +321,14 @@ namespace fvs
 
     void Editor::frameSliderPress()
     {
-        std::cout << "press" << std::endl;
+        //std::cout << "press" << std::endl;
         m_slider_pause = !m_loop;
         pause(true);
     }
 
     void Editor::frameSliderRelease()
     {
-        std::cout << "release" << std::endl;
+        //std::cout << "release" << std::endl;
         pause(m_slider_pause);
         m_slider_pause = false;
     }
