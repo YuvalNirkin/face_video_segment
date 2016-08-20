@@ -149,7 +149,7 @@ namespace segmentation
 
 	private:
 		void findFaceRegions(const SegmentationDesc& seg_desc, std::vector<int>& output_ids);
-		void calcSegmentation(const cv::Mat& frame, const SegmentationDesc& seg_desc,
+		void calcSegmentation1(const cv::Mat& frame, const SegmentationDesc& seg_desc,
 			const std::vector<int>& region_ids, cv::Mat& seg);
 		void calcSegmentation2(const cv::Mat& frame, const SegmentationDesc& seg_desc,
 			const std::vector<cv::Point>& landmarks, const std::vector<int>& region_ids,

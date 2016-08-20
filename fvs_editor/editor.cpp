@@ -43,6 +43,7 @@
 
 // face segmentation
 #include <utilities.h>
+#include <face_video_segment.pb.h>
 
 // OpenCV
 #include <opencv2/highgui.hpp>
@@ -109,6 +110,21 @@ namespace fvs
         m_seg_hierarchy.reset(new segmentation::SegmentationDesc);
         m_seg_reader->ReadNextFrame(m_seg_hierarchy.get());
 
+        // Initialize face segmentation
+        m_sequence_regions.reset(new Sequence());
+
+        // For each frame in the sequence
+        for (unsigned int i = 0; i < m_total_frames; ++i)
+        {
+            Frame* frame = m_sequence_regions->add_frames();
+            frame->set_id(0);
+            frame->set_width(m_frame_width);
+            frame->set_height(m_frame_height);
+            auto& faces = *frame->mutable_faces();
+            Face& face = faces[m_main_face_id];
+            face.set_id(m_main_face_id);
+        }
+        
         // Create main widget
         m_main_widget = new QLabel(this);
         setCentralWidget(m_main_widget);
@@ -188,30 +204,9 @@ namespace fvs
 
         if (object == m_display_widget && event->type() == QEvent::MouseButtonPress)
         {
+
             QMouseEvent *mouseEvent = static_cast<QMouseEvent*>(event);
-            QPoint pos = mouseEvent->pos();
-            std::cout << "pos = (" << pos.x() << ", " << pos.y() << ")" << std::endl;//
-            int id = segmentation::GetOversegmentedRegionIdFromPoint(pos.x(), pos.y(), *m_seg_desc);//
-            int parent_id = segmentation::GetParentId(id, 0, m_curr_hierarchy_level, m_seg_hierarchy->hierarchy());
-            std::cout << "oversegmented region id = " << id << std::endl;
-            std::cout << "parent region id = " << parent_id << std::endl;
-
-            // Get children
-            segmentation::ParentMap parentMap;
-            segmentation::GetParentMap(m_curr_hierarchy_level, *m_seg_desc, m_seg_hierarchy->hierarchy(), &parentMap);
-            std::cout << "children ids = ";
-            for(auto& r : parentMap[parent_id])
-                std::cout << r->id() << ", ";
-            std::cout << std::endl;
-            /*
-            std::vector<int> children_ids;
-            segmentation::GetChildrenIds(parent_id, m_curr_hierarchy_level, 0, m_seg_hierarchy->hierarchy(), &children_ids);
-            std::cout << "children ids = ";
-            for (int child_id : children_ids)
-                std::cout << child_id << ", ";
-            std::cout << std::endl;
-            */
-
+            regionSelected(mouseEvent);
             return true;
         }
         return false;
@@ -307,12 +302,74 @@ namespace fvs
             &frame);
             */
 
+        // Render segmentation
+        auto& faces = m_sequence_regions->frames(m_curr_frame_ind).faces();
+        auto& face = faces.find(m_main_face_id);
+        if (face != faces.end())
+        {
+            cv::Mat seg = calcSegmentation(frame.size(), face->second.regions(), *m_seg_desc);
+            renderSegmentationBlend(frame, seg);
+        }   
+
         renderBoundaries(frame, m_curr_hierarchy_level, *m_seg_desc, &m_seg_hierarchy->hierarchy());
 
         // Render landmarks
         const sfl::Face* main_face = m_sfl_frames[m_curr_frame_ind]->getFace(m_main_face_id);
         if(main_face != nullptr)
             sfl::render(frame, main_face->landmarks);
+    }
+
+    void Editor::regionSelected(QMouseEvent * event)
+    {
+        // Decide what to do with the selected regions
+        RegionType type = FULL;
+        bool insert = true;
+        switch (event->button())
+        {
+        case Qt::LeftButton: type = FULL; break;
+        case Qt::RightButton: type = INTERSECTION; break;
+        case Qt::MiddleButton: insert = false; break;
+        default: break;
+        }
+
+        //std::cout << "pos = (" << event->x() << ", " << event->y() << ")" << std::endl;//
+        int id = segmentation::GetOversegmentedRegionIdFromPoint(event->x(), event->y(), *m_seg_desc);//
+        int parent_id = segmentation::GetParentId(id, 0, m_curr_hierarchy_level, m_seg_hierarchy->hierarchy());
+        //std::cout << "oversegmented region id = " << id << std::endl;
+        //std::cout << "parent region id = " << parent_id << std::endl;
+
+        // Get children
+        segmentation::ParentMap parentMap;
+        segmentation::GetParentMap(m_curr_hierarchy_level, *m_seg_desc, m_seg_hierarchy->hierarchy(), &parentMap);
+        /*
+        std::cout << "children ids = ";
+        for (auto& r : parentMap[parent_id])
+            std::cout << r->id() << ", ";
+        std::cout << std::endl;
+        */
+
+        Frame* frame = m_sequence_regions->mutable_frames(m_curr_frame_ind);
+        auto& faces = *frame->mutable_faces();
+        Face& face = faces[(unsigned int)m_main_face_id];
+        auto& face_regions = *face.mutable_regions();
+
+        if (insert)
+        {
+            for (auto& r : parentMap[parent_id])
+            {
+                Region& face_region = face_regions[(unsigned int)r->id()];
+                face_region.set_id((unsigned int)r->id());
+                face_region.set_type(type);
+            }
+        }
+        else    // Remove
+        {
+            for (auto& r : parentMap[parent_id])
+                face_regions.erase((unsigned int)r->id());
+        }
+
+        m_refresh = true;
+        updateLater();
     }
 
     void Editor::frameIndexChanged(int n)

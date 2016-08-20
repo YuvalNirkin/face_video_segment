@@ -10,6 +10,7 @@ set(FVS_INCLUDE ${FVS_INCLUDE} ${PROTO_HDRS})
 
 # Target
 add_library(face_video_segment ${FVS_SRC} ${FVS_INCLUDE})
+target_include_directories(face_video_segment PRIVATE ${CMAKE_BINARY_DIR}/face_video_segment)
 target_include_directories(face_video_segment PUBLIC 
 	${VIDEO_SEGMENT_INCLUDE_DIRS} ${gflags_INCLUDE_DIRS} ${dlib_INCLUDE_DIRS} ${FIND_FACE_LANDMARKS_INCLUDE_DIRS})
 target_link_libraries(face_video_segment PUBLIC 

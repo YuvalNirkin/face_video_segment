@@ -27,6 +27,7 @@
 // ---
 
 #include "face_segmentation_unit.h"
+#include "utilities.h"
 
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
@@ -42,22 +43,6 @@ using namespace video_framework;
 namespace segmentation
 {
 	// Utilities
-
-	void createContours(const VectorMesh& mesh,
-		const SegmentationDesc_Polygon& poly,
-		std::vector<std::vector<cv::Point>>& contours)
-	{
-		contours.emplace_back();
-		std::vector<cv::Point>& contour = contours.back();
-
-		// For each coordinate
-		contour.resize(poly.coord_idx_size() - 1);
-		for (int c = 0; c < contour.size(); ++c)
-		{
-			int idx = poly.coord_idx(c);
-			contour[c] = cv::Point(mesh.coord(idx), mesh.coord(idx + 1));
-		}
-	}
 
 	void createFullFace(const std::vector<cv::Point>& landmarks,
 		std::vector<cv::Point>& full_face)
@@ -580,7 +565,7 @@ namespace segmentation
 		//std::unique_ptr<std::vector<int>> output_ids(new std::vector<int>());
 		std::unique_ptr<FaceSegLocalOutput> out_data(new FaceSegLocalOutput());
 		findFaceRegions(seg_desc, out_data->region_ids);
-		//calcSegmentation(frame, seg_desc, out_data->region_ids, out_data->seg);
+		//calcSegmentation1(frame, seg_desc, out_data->region_ids, out_data->seg);
 		calcSegmentation2(frame, seg_desc, landmarks, out_data->region_ids, out_data->seg);
 	
 		// Forward input
@@ -642,7 +627,7 @@ namespace segmentation
 		}
 	}
 
-	void FaceSegLocalUnit::calcSegmentation(const cv::Mat& frame, 
+	void FaceSegLocalUnit::calcSegmentation1(const cv::Mat& frame, 
 		const SegmentationDesc& seg_desc, const std::vector<int>& region_ids,
 		cv::Mat& seg)
 	{
@@ -737,7 +722,7 @@ namespace segmentation
 			{
 				if (!poly.hole()) continue;
 				if (poly.coord_idx_size() == 0) continue;
-				createContours(mesh, poly, holes);
+                fvs::createContours(mesh, poly, holes);
 			}
 
 			// For each polygon
@@ -746,7 +731,7 @@ namespace segmentation
 				if (poly.hole()) continue;
 				if (poly.coord_idx_size() == 0) continue;
 				std::vector<std::vector<cv::Point>> contours;
-				createContours(mesh, poly, contours);
+                fvs::createContours(mesh, poly, contours);
 
 				if (!contours.empty())
 				{
@@ -1214,12 +1199,12 @@ namespace segmentation
 				{
 					// Create hole
 					//std::cout << "Found hole!" << std::endl;
-					createContours(mesh, poly, contours);
+                    fvs::createContours(mesh, poly, contours);
 					color[0] = color[1] = color[2];
 				}
 				else
 				{
-					createContours(mesh, poly, contours);
+                    fvs::createContours(mesh, poly, contours);
 				}
 
 				// Render polygon

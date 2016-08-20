@@ -60,6 +60,7 @@ namespace segmentation
 
 namespace fvs
 {
+    class Sequence;
 
 	class Editor : public QMainWindow
 	{
@@ -80,6 +81,7 @@ namespace fvs
         void seek(int index);
         void pause(bool pause);
         void render(cv::Mat& frame);
+        void regionSelected(QMouseEvent* event);
 
     public slots:
         void frameIndexChanged(int);
@@ -120,6 +122,9 @@ namespace fvs
         std::unique_ptr<segmentation::SegmentationDesc> m_seg_desc;
         std::unique_ptr<segmentation::SegmentationDesc> m_seg_hierarchy;
         int m_hierarchy_pos;
+
+        // Face segmentation
+        std::unique_ptr<Sequence> m_sequence_regions;
 
         int m_frame_width, m_frame_height;
         double m_fps;
