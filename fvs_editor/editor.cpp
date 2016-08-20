@@ -41,6 +41,9 @@
 #include <segment_util/segmentation_util.h>
 #include <segment_util/segmentation_render.h>
 
+// face segmentation
+#include <utilities.h>
+
 // OpenCV
 #include <opencv2/highgui.hpp>
 
@@ -55,7 +58,7 @@ namespace fvs
 {
     Editor::Editor(const std::string & video_file, const std::string & seg_file,
         const std::string& landmarks_file, const std::string & output_dir) :
-        m_loop(true),
+        m_loop(false),
         m_refresh(true),
         m_slider_pause(false),
         m_update_pending(false),
@@ -78,9 +81,10 @@ namespace fvs
         m_fps = m_cap->get(cv::CAP_PROP_FPS);
         m_total_frames = (size_t)m_cap->get(cv::CAP_PROP_FRAME_COUNT);
         m_scaled_frame.reset(new cv::Mat(m_frame_height, m_frame_width, CV_8UC3));
+        m_render_frame.reset(new cv::Mat(m_frame_height, m_frame_width, CV_8UC3));
 
         // Make Qt image.
-        m_render_image.reset(new QImage((const uint8_t*)m_scaled_frame->data,
+        m_render_image.reset(new QImage((const uint8_t*)m_render_frame->data,
             m_scaled_frame->cols,
             m_scaled_frame->rows,
             m_scaled_frame->step[0],
@@ -260,7 +264,8 @@ namespace fvs
         // Render
         if (m_refresh)
         {
-            render(*m_scaled_frame);
+            m_scaled_frame->copyTo(*m_render_frame);
+            render(*m_render_frame);
             m_display_widget->setPixmap(QPixmap::fromImage(m_render_image->rgbSwapped()));
             m_display_widget->update();
         }
@@ -292,6 +297,7 @@ namespace fvs
 
     void Editor::render(cv::Mat& frame)
     {
+        /*
         // Render segmentation at specified level.
         segmentation::RenderRegionsRandomColor(m_curr_hierarchy_level,
             true,
@@ -299,6 +305,9 @@ namespace fvs
             *m_seg_desc,
             &m_seg_hierarchy->hierarchy(),
             &frame);
+            */
+
+        renderBoundaries(frame, m_curr_hierarchy_level, *m_seg_desc, &m_seg_hierarchy->hierarchy());
 
         // Render landmarks
         const sfl::Face* main_face = m_sfl_frames[m_curr_frame_ind]->getFace(m_main_face_id);

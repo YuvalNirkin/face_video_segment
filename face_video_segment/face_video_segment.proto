@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package fvs;
+
+message Sequence {
+	repeated Frame frames = 1;
+}
+
+message Frame {
+	uint32 id = 1;
+	uint32 width = 2;
+	uint32 height = 3;
+	repeated Face faces = 4;	
+}
+
+message Face {
+	uint32 id = 1;
+	repeated Region regions = 2;
+}
+
+message Region {
+	uint32 id = 1;
+	repeated bool polygons_selected = 2;
+}

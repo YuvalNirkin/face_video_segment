@@ -107,6 +107,7 @@ namespace fvs
         // video
         std::unique_ptr<cv::VideoCapture> m_cap;
         std::unique_ptr<cv::Mat> m_scaled_frame;
+        std::unique_ptr<cv::Mat> m_render_frame;
         std::unique_ptr<QImage> m_render_image;
 
         // sfl
