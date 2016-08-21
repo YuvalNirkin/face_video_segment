@@ -87,7 +87,7 @@ int main(int argc, char* argv[])
 
 	try
 	{
-		segmentation::FaceView viewer(inputPath, segPath, landmarksPath, outputDir, verbose);
+		fvs::FaceView viewer(inputPath, segPath, landmarksPath, outputDir, verbose);
 		viewer.run();
 	}
 	catch (std::exception& e)

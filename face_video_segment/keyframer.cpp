@@ -26,56 +26,54 @@
 //
 // ---
 
-#ifndef FACE_VIDEO_SEGMENT_KEYFRAME_WRITER_UNIT_H__
-#define FACE_VIDEO_SEGMENT_KEYFRAME_WRITER_UNIT_H__
-
-#include "base/base.h"
-#include "video_framework/video_unit.h"
 #include "keyframer.h"
+#include <sfl/utilities.h>
 
-#include <opencv2/core.hpp>
+const float MAX_DIST = 0.5f*sqrt(3.0f)*CV_PI;
+const float MIN_DIST = MAX_DIST / 20.0f;
 
-namespace fvs {
+namespace fvs 
+{
+    Keyframer::Keyframer(int start_frame, int stability_range) :
+        m_start_frame(start_frame), 
+        m_stability_range(stability_range),
+        m_frame_counter(0)
+    {
+    }
 
-	struct KeyframeWriterOptions {
-		std::string video_stream_name = "VideoStream";
-		std::string segment_stream_name = "SegmentationStream";
-		std::string landmarks_stream_name = "LandmarksStream";
-        std::string face_segment_stream_name = "FaceSegmentationStream";
-		std::string face_segment_renderer_stream_name = "FaceSegmentationRendererStream";
-		int start_frame = 10;
-        int stability_range = 5;
-        bool debug = false;
-	};
+    bool Keyframer::addFrame(const std::vector<cv::Point>& landmarks)
+    {
+        ++m_frame_counter;
 
-	class KeyframeWriter : public video_framework::VideoUnit {
-	public:
-	public:
-		KeyframeWriter(const KeyframeWriterOptions& options,
-			const std::string& output_dir, const std::string& src_name);
-		~KeyframeWriter();
+        // Check if a face was found this frame
+        if (landmarks.empty())
+        {
+            m_history.clear();
+            return false;
+        }
 
-		KeyframeWriter(const KeyframeWriter&) = delete;
-		KeyframeWriter& operator=(const KeyframeWriter&) = delete;
+        // Update history
+        m_history.push_back(landmarks);
+        if (m_history.size() > m_stability_range)
+            m_history.pop_front();
+        else return false;
 
-		virtual bool OpenStreams(video_framework::StreamSet* set);
-		virtual void ProcessFrame(video_framework::FrameSetPtr input, std::list<video_framework::FrameSetPtr>* output);
-		virtual bool PostProcess(std::list<video_framework::FrameSetPtr>* append);
+        // Check start frame
+        if (m_frame_counter < m_start_frame)
+            return false;
 
-	private:
-		KeyframeWriterOptions options_;
-		std::string output_dir_;
-		std::string src_name_;
+        // Compare against previous keyframes
+        cv::Point3f face_euler = sfl::getFaceApproxEulerAngles(landmarks);
+        for (Keyframe& kf : m_keyframes)
+        {
+            float d = cv::norm(face_euler - kf.euler_angles);
+            if (d < MIN_DIST) return false;
+        }
 
-		int video_stream_idx_;
-		int landmarks_stream_idx_;
-        int face_seg_stream_idx_;
-		int face_segment_renderer_stream_idx_;
+        // Add new keyframe
+        m_keyframes.push_front({ m_frame_counter - 1 , face_euler });
 
-		int frame_number_ = 0;
-        std::unique_ptr<Keyframer> keyframer_;
-	};
+        return true;
+    }
 
 }  // namespace fvs
-
-#endif  // FACE_VIDEO_SEGMENT_KEYFRAME_WRITER_UNIT_H__

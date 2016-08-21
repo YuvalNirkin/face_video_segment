@@ -31,6 +31,7 @@
 
 #include <memory>
 #include <QMainWindow>
+#include <opencv2/core/types.hpp>
 
 // Forward declarations
 class QLabel;
@@ -42,6 +43,7 @@ class QKeyEvent;
 namespace cv
 {
     class Mat;
+    //class Point;
     class VideoCapture;
 }
 
@@ -57,10 +59,11 @@ namespace segmentation
     class SegmentationDesc;
 }
 
-
 namespace fvs
 {
     class Sequence;
+    class Face;
+    class Keyframer;
 
 	class Editor : public QMainWindow
 	{
@@ -76,12 +79,15 @@ namespace fvs
         bool eventFilter(QObject * object, QEvent * event) Q_DECL_OVERRIDE;
         void keyPressEvent(QKeyEvent* event) Q_DECL_OVERRIDE;
 
+    private:
         void update();
         void updateLater();
         void seek(int index);
         void pause(bool pause);
         void render(cv::Mat& frame);
         void regionSelected(QMouseEvent* event);
+        Face& getFaceForEditing();
+        Face* getNearestEditedFace();
 
     public slots:
         void frameIndexChanged(int);
@@ -94,6 +100,12 @@ namespace fvs
         QLabel* m_display_widget;
         QSlider* m_frame_slider;
         QSlider* m_hierarchy_slider;
+        QLabel* m_frame_label;
+        QLabel* m_curr_frame_label;
+        QLabel* m_max_frame_label;
+        QLabel* m_hierarchy_label;
+        QLabel* m_curr_hierarchy_label;
+        QLabel* m_max_hierarchy_label;
 
         bool m_loop;
         bool m_refresh;
@@ -125,6 +137,12 @@ namespace fvs
 
         // Face segmentation
         std::unique_ptr<Sequence> m_sequence_regions;
+        std::unique_ptr<Sequence> m_edited_regions;
+        int m_edit_index;
+        std::unique_ptr<std::vector<std::vector<cv::Point>>> m_face_boundary;
+        std::unique_ptr<cv::Mat> m_face_map;
+        std::unique_ptr<Keyframer> m_keyframer;
+        std::vector<int> m_keyframes;
 
         int m_frame_width, m_frame_height;
         double m_fps;

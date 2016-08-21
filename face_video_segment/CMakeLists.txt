@@ -1,8 +1,8 @@
 # Source
 set(FVS_SRC landmarks_unit.cpp face_segmentation_unit.cpp video_writer_unit2.cpp
-	keyframe_writer_unit.cpp utilities.cpp)
+	keyframe_writer_unit.cpp utilities.cpp keyframer.cpp)
 set(FVS_INCLUDE landmarks_unit.h face_segmentation_unit.h video_writer_unit2.h
-	keyframe_writer_unit.h utilities.h)
+	keyframe_writer_unit.h utilities.h keyframer.h)
 set(PROTO_FILES face_video_segment.proto)
 protobuf_generate_cpp(PROTO_SRCS PROTO_HDRS ${PROTO_FILES})
 set(FVS_SRC ${FVS_SRC} ${PROTO_SRCS} ${PROTO_FILES})

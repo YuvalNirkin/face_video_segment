@@ -18,6 +18,13 @@ namespace fvs
         const google::protobuf::Map<google::protobuf::uint32, Region>& regions,
         const segmentation::SegmentationDesc& seg_desc);
 
+    cv::Mat calcSegmentation(const cv::Mat& face_map,
+        const google::protobuf::Map<google::protobuf::uint32, Region>& regions,
+        const segmentation::SegmentationDesc& seg_desc);
+
+    void createFullFace(const std::vector<cv::Point>& landmarks,
+        std::vector<cv::Point>& full_face);
+
     /** Render the boundaries of the segmentation regions.
         @param img The image that boundaries will be rendered on.
         @hierarchy_level The level of the hierarchy.
@@ -31,7 +38,16 @@ namespace fvs
         const segmentation::Hierarchy* seg_hier,
         const cv::Scalar& color = cv::Scalar(255, 255, 255));
 
-    void renderSegmentationBlend(cv::Mat& img, const cv::Mat& seg,
+    /** Render segmentation blended with image
+    @param img The image that the segmentation will be blended with.
+    @seg The segmentation as an 8-bit image.
+    Values of 255 denote full regions and values of 128 denote intersection regions.
+    @alpha Blending weight [0, 1].
+    0 means completely transparent and 1 means completely opaque.
+    @full_color The color to be used for full regions.
+    @intersection_color The color to be used for intersection regions.
+    */
+    void renderSegmentationBlend(cv::Mat& img, const cv::Mat& seg, float alpha = 0.5f,
         const cv::Scalar& full_color = cv::Scalar(0, 0, 255),
         const cv::Scalar& intersection_color = cv::Scalar(255, 0, 0));
 

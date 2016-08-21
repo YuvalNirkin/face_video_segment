@@ -33,8 +33,9 @@
 #include "video_framework/video_unit.h"
 #include "segment_util/segmentation_util.h"
 
-namespace segmentation 
+namespace fvs
 {
+    using namespace segmentation;
 
 	struct FaceSegmentationOptions {
 		std::string stream_name = "FaceSegmentationStream";
@@ -233,6 +234,6 @@ namespace segmentation
 		Hierarchy m_hierarchy;
 	};
 
-}  // namespace segmentation
+}  // namespace fvs
 
 #endif  // FACE_VIDEO_SEGMENT_FACE_SEGMENTATION_UNIT_H__

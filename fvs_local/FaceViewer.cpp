@@ -40,7 +40,7 @@
 
 using namespace video_framework;
 
-namespace segmentation
+namespace fvs
 {
 	FaceView::FaceView(const std::string& video_file, const std::string& seg_file,
 		const std::string& landmarks_path, const std::string& output_dir,
@@ -570,4 +570,4 @@ namespace segmentation
 		}
 		std::cout << "End of second pass" << std::endl;
 	}
-}
+}   // namespace fvs

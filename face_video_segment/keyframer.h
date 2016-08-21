@@ -26,56 +26,35 @@
 //
 // ---
 
-#ifndef FACE_VIDEO_SEGMENT_KEYFRAME_WRITER_UNIT_H__
-#define FACE_VIDEO_SEGMENT_KEYFRAME_WRITER_UNIT_H__
+#ifndef FVS_KEYFRAMER_H__
+#define FVS_KEYFRAMER_H__
 
-#include "base/base.h"
-#include "video_framework/video_unit.h"
-#include "keyframer.h"
-
+#include <list>
 #include <opencv2/core.hpp>
 
 namespace fvs {
 
-	struct KeyframeWriterOptions {
-		std::string video_stream_name = "VideoStream";
-		std::string segment_stream_name = "SegmentationStream";
-		std::string landmarks_stream_name = "LandmarksStream";
-        std::string face_segment_stream_name = "FaceSegmentationStream";
-		std::string face_segment_renderer_stream_name = "FaceSegmentationRendererStream";
-		int start_frame = 10;
-        int stability_range = 5;
-        bool debug = false;
+	struct Keyframe
+	{
+		int id;
+		cv::Point3f euler_angles;
 	};
 
-	class KeyframeWriter : public video_framework::VideoUnit {
-	public:
-	public:
-		KeyframeWriter(const KeyframeWriterOptions& options,
-			const std::string& output_dir, const std::string& src_name);
-		~KeyframeWriter();
+    class Keyframer
+    {
+    public:
+        Keyframer(int start_frame = 10, int stability_range = 5);
 
-		KeyframeWriter(const KeyframeWriter&) = delete;
-		KeyframeWriter& operator=(const KeyframeWriter&) = delete;
+        bool addFrame(const std::vector<cv::Point>& landmarks);
 
-		virtual bool OpenStreams(video_framework::StreamSet* set);
-		virtual void ProcessFrame(video_framework::FrameSetPtr input, std::list<video_framework::FrameSetPtr>* output);
-		virtual bool PostProcess(std::list<video_framework::FrameSetPtr>* append);
-
-	private:
-		KeyframeWriterOptions options_;
-		std::string output_dir_;
-		std::string src_name_;
-
-		int video_stream_idx_;
-		int landmarks_stream_idx_;
-        int face_seg_stream_idx_;
-		int face_segment_renderer_stream_idx_;
-
-		int frame_number_ = 0;
-        std::unique_ptr<Keyframer> keyframer_;
-	};
+    private:
+        std::list<Keyframe> m_keyframes;
+        std::list<std::vector<cv::Point>> m_history;
+        int m_start_frame;
+        int m_stability_range;
+        int m_frame_counter;
+    };
 
 }  // namespace fvs
 
-#endif  // FACE_VIDEO_SEGMENT_KEYFRAME_WRITER_UNIT_H__
+#endif  // FVS_KEYFRAMER_H__

@@ -44,8 +44,10 @@
 // face segmentation
 #include <utilities.h>
 #include <face_video_segment.pb.h>
+#include <keyframer.h>
 
 // OpenCV
+#include <opencv2/imgproc.hpp>
 #include <opencv2/highgui.hpp>
 
 // Qt
@@ -70,7 +72,8 @@ namespace fvs
         m_fps(0),
         m_total_frames(0),
         m_main_face_id(0),
-        m_hierarchy_pos(0)
+        m_hierarchy_pos(0),
+        m_edit_index(-1)
     {
         // Initialize video capture
         m_cap.reset(new cv::VideoCapture());
@@ -112,6 +115,10 @@ namespace fvs
 
         // Initialize face segmentation
         m_sequence_regions.reset(new Sequence());
+        m_edited_regions.reset(new Sequence());
+        m_face_boundary.reset(new std::vector<std::vector<cv::Point>>());
+        m_face_boundary->resize(1);
+        m_face_map.reset(new cv::Mat(m_frame_height, m_frame_width, CV_8U));
 
         // For each frame in the sequence
         for (unsigned int i = 0; i < m_total_frames; ++i)
@@ -124,6 +131,21 @@ namespace fvs
             Face& face = faces[m_main_face_id];
             face.set_id(m_main_face_id);
         }
+
+        // Initialize keyframer
+        m_keyframer = std::make_unique<Keyframer>(15, 5);
+        for (auto& frame : m_sfl->getSequence())
+        {
+            const sfl::Face* face = frame->getFace(m_main_face_id);
+            if (m_keyframer->addFrame(face->landmarks))
+                m_keyframes.push_back(frame->id);
+            
+        }
+        /// Debug keyframes ///
+        //std::cout << "keyframes = " << std::endl;
+        //for (int id : m_keyframes) std::cout << id << ", ";
+        //std::cout << std::endl;
+        ///////////////////////
         
         // Create main widget
         m_main_widget = new QLabel(this);
@@ -133,7 +155,6 @@ namespace fvs
         // Create simple widget used for display.
         m_display_widget = new QLabel(this);
         m_display_widget->installEventFilter(this);
-        
 
         // Frame slider
         m_frame_slider = new QSlider(Qt::Horizontal);
@@ -155,14 +176,49 @@ namespace fvs
         m_hierarchy_slider->setValue(m_curr_hierarchy_level);
         //connect(m_hierarchy_slider, SIGNAL(sliderMoved(int)), this, SLOT(ChangeLevel(int)));
         connect(m_hierarchy_slider, SIGNAL(valueChanged(int)), this, SLOT(hierarchyLevelChanged(int)));
+        style()->
+        // Create labels
+        m_frame_label = new QLabel(this);
+        m_frame_label->setText("Frame: ");
+        m_frame_label->setAlignment(Qt::AlignLeft);
+        m_curr_frame_label = new QLabel(this);
+        m_curr_frame_label->setText(std::to_string(m_curr_frame_ind).c_str());
+        m_curr_frame_label->setAlignment(Qt::AlignLeft);
+        m_max_frame_label = new QLabel(this);
+        m_max_frame_label->setText(std::to_string(m_total_frames - 1).c_str());
+        m_max_frame_label->setAlignment(Qt::AlignRight);
 
-        // GUI layout.
+        m_hierarchy_label = new QLabel(this);
+        m_hierarchy_label->setText("Hierarchy: ");
+        m_hierarchy_label->setAlignment(Qt::AlignLeft);
+        m_curr_hierarchy_label = new QLabel(this);
+        m_curr_hierarchy_label->setText(std::to_string(m_curr_hierarchy_level).c_str());
+        m_curr_hierarchy_label->setAlignment(Qt::AlignLeft);
+        m_max_hierarchy_label = new QLabel(this);
+        m_max_hierarchy_label->setText(std::to_string(m_max_hierarchy_level - 1).c_str());
+        m_max_hierarchy_label->setAlignment(Qt::AlignRight);
+
+        // GUI layout
+        QGridLayout* centralLayout = new QGridLayout;
+        centralLayout->addWidget(m_display_widget, 0 ,0, 1, 4);
+        centralLayout->addWidget(m_frame_label, 1, 0);
+        centralLayout->addWidget(m_curr_frame_label, 1, 1);
+        centralLayout->addWidget(m_frame_slider, 1, 2);
+        centralLayout->addWidget(m_max_frame_label, 1, 3);
+        centralLayout->addWidget(m_hierarchy_label, 2, 0);
+        centralLayout->addWidget(m_curr_hierarchy_label, 2, 1);
+        centralLayout->addWidget(m_hierarchy_slider, 2, 2);
+        centralLayout->addWidget(m_max_hierarchy_label, 2, 3);
+        centralLayout->setAlignment(Qt::Alignment(Qt::AlignTop));
+        m_main_widget->setLayout(centralLayout);
+        /*
         QGridLayout* centralLayout = new QGridLayout;
         centralLayout->addWidget(m_display_widget);
         centralLayout->addWidget(m_frame_slider);
         centralLayout->addWidget(m_hierarchy_slider);
         centralLayout->setAlignment(Qt::Alignment(Qt::AlignTop));
         m_main_widget->setLayout(centralLayout);
+        */
 
         // Resize
         const int border = 11 * 2;
@@ -176,6 +232,10 @@ namespace fvs
             frame_slider_size.height() + hierarchy_slider_size.height());
         m_display_widget->resize(m_frame_width, m_frame_height);
         m_display_widget->setSizePolicy(QSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed));
+        m_curr_frame_label->setFixedWidth((border * 3) / 2);
+        m_max_frame_label->setFixedWidth((border * 3) / 2);
+        m_curr_hierarchy_label->setFixedWidth((border * 3) / 2);
+        m_max_hierarchy_label->setFixedWidth((border * 3) / 2);
         m_main_widget->resize(window_size);
         resize(window_size);
 
@@ -251,6 +311,16 @@ namespace fvs
                     //std::cout << "hierarchy size = " << m_seg_hierarchy->hierarchy_size() << std::endl;//
                 }
 
+                // Update face segmentation
+                const sfl::Face* face = m_sfl_frames[m_curr_frame_ind]->getFace(m_main_face_id);
+                if (face != nullptr)
+                {
+                    createFullFace(face->landmarks, m_face_boundary->back());
+                    *m_face_map = cv::Mat::zeros(m_scaled_frame->size(), CV_8U);
+                    cv::drawContours(*m_face_map, *m_face_boundary, 0, cv::Scalar(255, 255, 255), CV_FILLED);
+                }  
+                else m_face_boundary->back().clear();
+
                 m_refresh = true;
                 m_update_frame = m_loop;
             }
@@ -303,20 +373,32 @@ namespace fvs
             */
 
         // Render segmentation
-        auto& faces = m_sequence_regions->frames(m_curr_frame_ind).faces();
-        auto& face = faces.find(m_main_face_id);
-        if (face != faces.end())
-        {
-            cv::Mat seg = calcSegmentation(frame.size(), face->second.regions(), *m_seg_desc);
-            renderSegmentationBlend(frame, seg);
-        }   
+        //auto& faces = m_sequence_regions->frames(m_curr_frame_ind).faces();
+        //auto& face = faces.find(m_main_face_id);
+        //if (face != faces.end())
+        //{
+            cv::Mat seg;
+            Face* edit_face = getNearestEditedFace();
+            if (edit_face != nullptr)
+            {
+                if (m_face_boundary->back().empty())
+                    seg = calcSegmentation(frame.size(), edit_face->regions(), *m_seg_desc);
+                else seg = calcSegmentation(*m_face_map, edit_face->regions(), *m_seg_desc);
+                renderSegmentationBlend(frame, seg, 0.25f);
+            } 
+        //}   
 
         renderBoundaries(frame, m_curr_hierarchy_level, *m_seg_desc, &m_seg_hierarchy->hierarchy());
 
+        if(!m_face_boundary->back().empty())
+            cv::drawContours(frame, *m_face_boundary, 0, cv::Scalar(0, 255, 0), 1);
+
+        /*
         // Render landmarks
         const sfl::Face* main_face = m_sfl_frames[m_curr_frame_ind]->getFace(m_main_face_id);
         if(main_face != nullptr)
             sfl::render(frame, main_face->landmarks);
+            */
     }
 
     void Editor::regionSelected(QMouseEvent * event)
@@ -347,10 +429,12 @@ namespace fvs
             std::cout << r->id() << ", ";
         std::cout << std::endl;
         */
-
+        /*
         Frame* frame = m_sequence_regions->mutable_frames(m_curr_frame_ind);
         auto& faces = *frame->mutable_faces();
         Face& face = faces[(unsigned int)m_main_face_id];
+        */
+        Face& face = getFaceForEditing();
         auto& face_regions = *face.mutable_regions();
 
         if (insert)
@@ -372,16 +456,93 @@ namespace fvs
         updateLater();
     }
 
+    Face & Editor::getFaceForEditing()
+    {
+        // Find edit frame (assume sorted)
+        Frame *edit_frame = nullptr, *nearest_edit_frame = nullptr;
+        int frame_ind = 0;
+        for (Frame& frame : *m_edited_regions->mutable_frames())
+        {
+            if (frame.id() == m_curr_frame_ind)
+            {
+                edit_frame = &frame;
+                m_edit_index = frame_ind;
+                break;
+            }
+            else if (frame.id() < m_curr_frame_ind)
+                nearest_edit_frame = &frame;
+
+            ++frame_ind;
+        }
+
+        // Don't inherit if already exists
+        if (edit_frame != nullptr) nearest_edit_frame = nullptr;
+
+        // Create edit frame if it doesn't exist for current frame index
+        if (edit_frame == nullptr)
+        {
+            edit_frame = m_edited_regions->add_frames();
+            edit_frame->set_id(m_curr_frame_ind);
+            edit_frame->set_width(m_frame_width);
+            edit_frame->set_height(m_frame_height);
+
+            // Sort frames
+            std::sort(m_edited_regions->mutable_frames()->begin(),
+                m_edited_regions->mutable_frames()->end(),
+                [](const Frame& f1, const Frame& f2) {
+                return f1.id() < f1.id();
+            });
+        }
+
+        // Get edit face
+        auto& face_map = *edit_frame->mutable_faces();
+        Face& edit_face = face_map[(unsigned int)m_main_face_id];
+        edit_face.set_id((unsigned int)m_main_face_id);
+
+        // Inherit regions from nearest edit frame
+        if (nearest_edit_frame != nullptr)
+        {
+            auto& nearest_face_map = *nearest_edit_frame->mutable_faces();
+            Face& nearest_edit_face = nearest_face_map[(unsigned int)m_main_face_id];
+            for (auto& r : *nearest_edit_face.mutable_regions())
+                (*edit_face.mutable_regions())[r.first] = r.second;
+        }
+
+        // Return face for editing
+        return edit_face;
+    }
+
+    Face* Editor::getNearestEditedFace()
+    {
+        if (m_edited_regions->mutable_frames()->empty()) return nullptr;
+        
+        // Find closest frame (assume sorted)
+        Face* edit_face = nullptr;
+        for (Frame& frame : *m_edited_regions->mutable_frames())
+        {
+            if (frame.id() <= m_curr_frame_ind)
+            {
+                auto& face_map = *frame.mutable_faces();
+                edit_face = &face_map[(unsigned int)m_main_face_id];
+                if(frame.id() == m_curr_frame_ind) break;
+            }
+        }
+
+        return edit_face;
+    }
+
     void Editor::frameIndexChanged(int n)
     {
         //m_curr_frame_ind = n;
         //m_frame_slider->setValue(m_curr_frame_ind);
+        m_curr_frame_label->setText(std::to_string(n).c_str());
         seek(n);
     }  
 
     void Editor::hierarchyLevelChanged(int n) {
         m_curr_hierarchy_level = n;
         m_hierarchy_slider->setValue(m_curr_hierarchy_level);
+        m_curr_hierarchy_label->setText(std::to_string(n).c_str());
         m_refresh = true;
     }
 

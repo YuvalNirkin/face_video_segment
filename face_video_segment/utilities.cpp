@@ -31,11 +31,19 @@ namespace fvs
         const google::protobuf::Map<google::protobuf::uint32, Region>& regions,
         const segmentation::SegmentationDesc & seg_desc)
     {
-        cv::Mat seg = cv::Mat::zeros(size, CV_8U);
+        cv::Mat face_map = cv::Mat::zeros(size, CV_8U);
+        return calcSegmentation(face_map, regions, seg_desc);
+    }
+
+    cv::Mat calcSegmentation(const cv::Mat& face_map, 
+        const google::protobuf::Map<google::protobuf::uint32, Region>& regions,
+        const segmentation::SegmentationDesc& seg_desc)
+    {
+        cv::Mat seg = cv::Mat::zeros(face_map.size(), CV_8U);
         const VectorMesh& mesh = seg_desc.vector_mesh();
 
         // For each region
-        cv::Mat poly_map = cv::Mat::zeros(size, CV_8U);
+        cv::Mat poly_map = cv::Mat::zeros(face_map.size(), CV_8U);
         cv::Scalar region_color;
         for (const auto& r : seg_desc.region())
         {
@@ -73,11 +81,15 @@ namespace fvs
 
                     // Add to segmentation
                     unsigned char *seg_data = seg.data, *poly_map_data = poly_map.data;
+                    unsigned char *face_map_data = face_map.data;
+                    unsigned char pv = 0;
                     for (size_t i = 0; i < seg.total(); ++i)
                     {
-                        if (*poly_map_data > 0) *seg_data = *poly_map_data;
+                        pv = *poly_map_data++;
+                        if (pv == 255 || (pv == 128 && *face_map_data > 0))
+                            *seg_data = pv;
                         ++seg_data;
-                        ++poly_map_data;
+                        ++face_map_data;
                     }
 
                     // Clear map
@@ -87,6 +99,41 @@ namespace fvs
         }
 
         return seg;
+    }
+
+    void createFullFace(const std::vector<cv::Point>& landmarks, std::vector<cv::Point>& full_face)
+    {
+        if (landmarks.size() != 68) return;
+
+        // Jaw line
+        full_face = {
+            { landmarks[0] },
+            { landmarks[1] },
+            { landmarks[2] },
+            { landmarks[3] },
+            { landmarks[4] },
+            { landmarks[5] },
+            { landmarks[6] },
+            { landmarks[7] },
+            { landmarks[8] },
+            { landmarks[9] },
+            { landmarks[10] },
+            { landmarks[11] },
+            { landmarks[12] },
+            { landmarks[13] },
+            { landmarks[14] },
+            { landmarks[15] },
+            { landmarks[16] }
+        };
+
+        // Forehead
+        cv::Point dir = (landmarks[27] - landmarks[30]);
+        if (landmarks[26].x > landmarks[16].x) full_face.push_back(landmarks[26]);
+        full_face.push_back(landmarks[26] + dir);
+        full_face.push_back(landmarks[24] + dir);
+        full_face.push_back(landmarks[19] + dir);
+        full_face.push_back(landmarks[17] + dir);
+        if (landmarks[17].x < landmarks[0].x) full_face.push_back(landmarks[17]);
     }
 
     void renderBoundaries(cv::Mat& img, int hierarchy_level,
@@ -142,7 +189,7 @@ namespace fvs
         }
     }
 
-    void renderSegmentationBlend(cv::Mat& img, const cv::Mat& seg,
+    void renderSegmentationBlend(cv::Mat& img, const cv::Mat& seg, float alpha,
         const cv::Scalar& full_color, const cv::Scalar& intersection_color)
     {
         cv::Point3_<uchar> full_bgr((uchar)full_color[0], (uchar)full_color[1],
@@ -151,7 +198,6 @@ namespace fvs
             (uchar)intersection_color[1], (uchar)intersection_color[2]);
 
         int r, c;
-        const float a = 0.5f;
         cv::Point3_<uchar>* img_data = (cv::Point3_<uchar>*)img.data;
         unsigned char* seg_data = seg.data;
         unsigned char s;
@@ -162,15 +208,15 @@ namespace fvs
                 s = *seg_data++;
                 if (s == 255)
                 {
-                    img_data->x = (unsigned char)std::round(full_bgr.x * a + img_data->x*(1 - a));
-                    img_data->y = (unsigned char)std::round(full_bgr.y * a + img_data->y*(1 - a));
-                    img_data->z = (unsigned char)std::round(full_bgr.z * a + img_data->z*(1 - a));
+                    img_data->x = (unsigned char)std::round(full_bgr.x * alpha + img_data->x*(1 - alpha));
+                    img_data->y = (unsigned char)std::round(full_bgr.y * alpha + img_data->y*(1 - alpha));
+                    img_data->z = (unsigned char)std::round(full_bgr.z * alpha + img_data->z*(1 - alpha));
                 }
                 else if (s == 128)
                 {
-                    img_data->x = (unsigned char)std::round(intersection_bgr.x * a + img_data->x*(1 - a));
-                    img_data->y = (unsigned char)std::round(intersection_bgr.y * a + img_data->y*(1 - a));
-                    img_data->z = (unsigned char)std::round(intersection_bgr.z * a + img_data->z*(1 - a));
+                    img_data->x = (unsigned char)std::round(intersection_bgr.x * alpha + img_data->x*(1 - alpha));
+                    img_data->y = (unsigned char)std::round(intersection_bgr.y * alpha + img_data->y*(1 - alpha));
+                    img_data->z = (unsigned char)std::round(intersection_bgr.z * alpha + img_data->z*(1 - alpha));
                 }
                 ++img_data;
             }

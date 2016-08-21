@@ -34,7 +34,7 @@
 #include <segment_util/segmentation_util.h>
 #include <segment_util/segmentation_render.h>
 
-namespace segmentation
+namespace fvs
 {
 
 	class FaceView
@@ -59,4 +59,4 @@ namespace segmentation
 		std::string m_output_dir;
 		unsigned int m_verbose;
 	};
-}
+}   // namespace fvs

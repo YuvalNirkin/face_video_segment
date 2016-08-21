@@ -39,48 +39,11 @@
 #include <sfl/utilities.h>
 
 using namespace video_framework;
+using namespace segmentation;
 
-namespace segmentation
+namespace fvs
 {
 	// Utilities
-
-	void createFullFace(const std::vector<cv::Point>& landmarks,
-		std::vector<cv::Point>& full_face)
-	{
-		if (landmarks.size() != 68) return;
-
-		//cv::Point dir = (landmarks[27] - landmarks[34]);	// Why 34??
-		cv::Point dir = (landmarks[27] - landmarks[30]);
-		//dir.x = -dir.x;	// Invert dx
-
-		// Jaw line
-		full_face = {
-			{ landmarks[0] },
-			{ landmarks[1] },
-			{ landmarks[2] },
-			{ landmarks[3] },
-			{ landmarks[4] },
-			{ landmarks[5] },
-			{ landmarks[6] },
-			{ landmarks[7] },
-			{ landmarks[8] },
-			{ landmarks[9] },
-			{ landmarks[10] },
-			{ landmarks[11] },
-			{ landmarks[12] },
-			{ landmarks[13] },
-			{ landmarks[14] },
-			{ landmarks[15] },
-			{ landmarks[16] }
-		};
-
-		if (landmarks[26].x > landmarks[16].x) full_face.push_back(landmarks[26]);
-		full_face.push_back(landmarks[26] + dir);
-		full_face.push_back(landmarks[24] + dir);
-		full_face.push_back(landmarks[19] + dir);
-		full_face.push_back(landmarks[17] + dir);
-		if (landmarks[17].x < landmarks[0].x) full_face.push_back(landmarks[17]);
-	}
 
 	float getFaceDominantSide(const std::vector<cv::Point>& landmarks)
 	{
@@ -722,7 +685,7 @@ namespace segmentation
 			{
 				if (!poly.hole()) continue;
 				if (poly.coord_idx_size() == 0) continue;
-                fvs::createContours(mesh, poly, holes);
+                createContours(mesh, poly, holes);
 			}
 
 			// For each polygon
@@ -731,7 +694,7 @@ namespace segmentation
 				if (poly.hole()) continue;
 				if (poly.coord_idx_size() == 0) continue;
 				std::vector<std::vector<cv::Point>> contours;
-                fvs::createContours(mesh, poly, contours);
+                createContours(mesh, poly, contours);
 
 				if (!contours.empty())
 				{
@@ -1199,12 +1162,12 @@ namespace segmentation
 				{
 					// Create hole
 					//std::cout << "Found hole!" << std::endl;
-                    fvs::createContours(mesh, poly, contours);
+                    createContours(mesh, poly, contours);
 					color[0] = color[1] = color[2];
 				}
 				else
 				{
-                    fvs::createContours(mesh, poly, contours);
+                    createContours(mesh, poly, contours);
 				}
 
 				// Render polygon
@@ -1271,4 +1234,4 @@ namespace segmentation
 		}
 	}
 
-}  // namespace video_framework.
+}  // namespace fvs
