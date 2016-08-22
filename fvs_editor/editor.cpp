@@ -54,8 +54,11 @@
 #include <QLabel>
 #include <QSlider>
 #include <QGridLayout>
+#include <QBoxLayout>
 #include <QMouseEvent>
 #include <QCoreApplication>
+#include <QStyle>
+#include <QToolButton>
 
 namespace fvs
 {
@@ -176,7 +179,7 @@ namespace fvs
         m_hierarchy_slider->setValue(m_curr_hierarchy_level);
         //connect(m_hierarchy_slider, SIGNAL(sliderMoved(int)), this, SLOT(ChangeLevel(int)));
         connect(m_hierarchy_slider, SIGNAL(valueChanged(int)), this, SLOT(hierarchyLevelChanged(int)));
-        style()->
+        
         // Create labels
         m_frame_label = new QLabel(this);
         m_frame_label->setText("Frame: ");
@@ -198,6 +201,19 @@ namespace fvs
         m_max_hierarchy_label->setText(std::to_string(m_max_hierarchy_level - 1).c_str());
         m_max_hierarchy_label->setAlignment(Qt::AlignRight);
 
+        // Create buttons
+        m_play_button = new QToolButton(this);
+        m_play_button->setIcon(style()->standardIcon(QStyle::SP_MediaPause));
+        connect(m_play_button, SIGNAL(clicked()), this, SLOT(playButtonClicked()));
+        m_previous_keyframe_button = new QToolButton(this);
+        m_previous_keyframe_button->setIcon(style()->standardIcon(QStyle::SP_MediaSeekBackward));
+        connect(m_previous_keyframe_button, SIGNAL(clicked()), this, SLOT(previousKeyFrameButtonClicked()));
+        m_next_keyframe_button = new QToolButton(this);
+        m_next_keyframe_button->setIcon(style()->standardIcon(QStyle::SP_MediaSeekForward));
+        connect(m_next_keyframe_button, SIGNAL(clicked()), this, SLOT(nextKeyFrameButtonClicked()));
+
+        //;
+
         // GUI layout
         QGridLayout* centralLayout = new QGridLayout;
         centralLayout->addWidget(m_display_widget, 0 ,0, 1, 4);
@@ -209,6 +225,17 @@ namespace fvs
         centralLayout->addWidget(m_curr_hierarchy_label, 2, 1);
         centralLayout->addWidget(m_hierarchy_slider, 2, 2);
         centralLayout->addWidget(m_max_hierarchy_label, 2, 3);
+        QHBoxLayout* buttonLayout = new QHBoxLayout;
+        buttonLayout->addStretch();
+        buttonLayout->addWidget(m_previous_keyframe_button);
+        buttonLayout->addSpacing(8);
+        buttonLayout->addWidget(m_play_button);
+        buttonLayout->addSpacing(8);
+        buttonLayout->addWidget(m_next_keyframe_button);
+        buttonLayout->addStretch();
+        //buttonLayout->setAlignment(Qt::AlignCenter);
+        centralLayout->addLayout(buttonLayout, 3, 0, 1, 4);
+        centralLayout->setHorizontalSpacing(0);
         centralLayout->setAlignment(Qt::Alignment(Qt::AlignTop));
         m_main_widget->setLayout(centralLayout);
         /*
@@ -229,7 +256,7 @@ namespace fvs
         QSize frame_slider_size = m_frame_slider->minimumSizeHint();
         QSize hierarchy_slider_size = m_frame_slider->minimumSizeHint();
         QSize window_size(m_frame_width + border, m_frame_height + 2*border +
-            frame_slider_size.height() + hierarchy_slider_size.height());
+            frame_slider_size.height() + hierarchy_slider_size.height() + m_play_button->height());
         m_display_widget->resize(m_frame_width, m_frame_height);
         m_display_widget->setSizePolicy(QSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed));
         m_curr_frame_label->setFixedWidth((border * 3) / 2);
@@ -357,7 +384,12 @@ namespace fvs
     {
         m_loop = !pause;
         m_update_frame = m_refresh = m_loop;
-        if (m_loop) updateLater();
+        if (m_loop)
+        {
+            updateLater();
+            m_play_button->setIcon(style()->standardIcon(QStyle::SP_MediaPlay));
+        }
+        else m_play_button->setIcon(style()->standardIcon(QStyle::SP_MediaPause));
     }
 
     void Editor::render(cv::Mat& frame)
@@ -544,6 +576,37 @@ namespace fvs
         m_hierarchy_slider->setValue(m_curr_hierarchy_level);
         m_curr_hierarchy_label->setText(std::to_string(n).c_str());
         m_refresh = true;
+    }
+
+    void Editor::playButtonClicked()
+    {
+        pause(m_loop);
+    }
+
+    void Editor::previousKeyFrameButtonClicked()
+    {
+        if (m_keyframes.empty()) return;
+        for (int i = (int)m_keyframes.size() - 1; i >= 0; --i)
+        {
+            if (m_keyframes[i] < m_curr_frame_ind)
+            {
+                seek(m_keyframes[i]);
+                break;
+            }
+        }     
+    }
+
+    void Editor::nextKeyFrameButtonClicked()
+    {
+        if (m_keyframes.empty()) return;
+        for (size_t i = 0; i < m_keyframes.size(); ++i)
+        {
+            if (m_keyframes[i] > m_curr_frame_ind)
+            {
+                seek(m_keyframes[i]);
+                break;
+            }
+        }      
     }
 
     void Editor::frameSliderPress()

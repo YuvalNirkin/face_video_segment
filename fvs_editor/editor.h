@@ -39,6 +39,7 @@ class QImage;
 class QSlider;
 class QMouseEvent;
 class QKeyEvent;
+class QToolButton;
 
 namespace cv
 {
@@ -94,6 +95,9 @@ namespace fvs
         void frameSliderPress();
         void frameSliderRelease();
         void hierarchyLevelChanged(int);
+        void playButtonClicked();
+        void previousKeyFrameButtonClicked();
+        void nextKeyFrameButtonClicked();
         
     private:
         QLabel* m_main_widget;
@@ -106,6 +110,9 @@ namespace fvs
         QLabel* m_hierarchy_label;
         QLabel* m_curr_hierarchy_label;
         QLabel* m_max_hierarchy_label;
+        QToolButton* m_play_button;
+        QToolButton* m_previous_keyframe_button;
+        QToolButton* m_next_keyframe_button;
 
         bool m_loop;
         bool m_refresh;
