@@ -50,6 +50,7 @@ find_package(find_face_landmarks REQUIRED)
 
 add_subdirectory(face_video_segment)
 add_subdirectory(fvs_local)
+add_subdirectory(fvs_find_regions)
 add_subdirectory(fvs_editor)
 
 # interfaces

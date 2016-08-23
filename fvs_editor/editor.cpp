@@ -62,8 +62,9 @@
 
 namespace fvs
 {
-    Editor::Editor(const std::string & video_file, const std::string & seg_file,
-        const std::string& landmarks_file, const std::string & output_dir) :
+    Editor::Editor(const std::string& video_file, const std::string& seg_file,
+        const std::string& landmarks_file, const std::string& fvs_path,
+        const std::string& output_dir) :
         m_loop(false),
         m_refresh(true),
         m_slider_pause(false),
@@ -117,22 +118,30 @@ namespace fvs
         m_seg_reader->ReadNextFrame(m_seg_hierarchy.get());
 
         // Initialize face segmentation
-        m_sequence_regions.reset(new Sequence());
+        m_input_regions.reset(new Sequence());
         m_edited_regions.reset(new Sequence());
         m_face_boundary.reset(new std::vector<std::vector<cv::Point>>());
         m_face_boundary->resize(1);
         m_face_map.reset(new cv::Mat(m_frame_height, m_frame_width, CV_8U));
 
-        // For each frame in the sequence
-        for (unsigned int i = 0; i < m_total_frames; ++i)
+        if (fvs_path.empty())   // Initialize empty faces
         {
-            Frame* frame = m_sequence_regions->add_frames();
-            frame->set_id(0);
-            frame->set_width(m_frame_width);
-            frame->set_height(m_frame_height);
-            auto& faces = *frame->mutable_faces();
-            Face& face = faces[m_main_face_id];
-            face.set_id(m_main_face_id);
+            // For each frame in the sequence
+            for (unsigned int i = 0; i < m_total_frames; ++i)
+            {
+                Frame* frame = m_input_regions->add_frames();
+                frame->set_id(0);
+                frame->set_width(m_frame_width);
+                frame->set_height(m_frame_height);
+                auto& faces = *frame->mutable_faces();
+                Face& face = faces[m_main_face_id];
+                face.set_id(m_main_face_id);
+            }
+        }
+        else    // Read input regions from file
+        {    
+            std::ifstream input(fvs_path, std::ifstream::binary);
+            m_input_regions->ParseFromIstream(&input);
         }
 
         // Initialize keyframer
@@ -140,8 +149,10 @@ namespace fvs
         for (auto& frame : m_sfl->getSequence())
         {
             const sfl::Face* face = frame->getFace(m_main_face_id);
-            if (m_keyframer->addFrame(face->landmarks))
+            if (face != nullptr && m_keyframer->addFrame(face->landmarks))
                 m_keyframes.push_back(frame->id);
+            else if (face == nullptr) 
+                m_keyframer->addFrame(std::vector<cv::Point>());
             
         }
         /// Debug keyframes ///
@@ -405,44 +416,45 @@ namespace fvs
             */
 
         // Render segmentation
-        //auto& faces = m_sequence_regions->frames(m_curr_frame_ind).faces();
-        //auto& face = faces.find(m_main_face_id);
-        //if (face != faces.end())
-        //{
-            cv::Mat seg;
-            Face* edit_face = getNearestEditedFace();
-            if (edit_face != nullptr)
-            {
-                if (m_face_boundary->back().empty())
-                    seg = calcSegmentation(frame.size(), edit_face->regions(), *m_seg_desc);
-                else seg = calcSegmentation(*m_face_map, edit_face->regions(), *m_seg_desc);
-                renderSegmentationBlend(frame, seg, 0.25f);
-            } 
-        //}   
+        auto& input_face_map = m_input_regions->frames(m_curr_frame_ind).faces();
+        auto& input_face = input_face_map.find(m_main_face_id);
+        // TODO: copy input regions and override with selected regions
+        cv::Mat seg;
+        Face* edit_face = getNearestEditedFace();
+        //if (edit_face != nullptr)
+        if(input_face != input_face_map.end())
+        {
+            /*
+            if (m_face_boundary->back().empty())
+                seg = calcSegmentation(frame.size(), edit_face->regions(), *m_seg_desc);
+            else seg = calcSegmentation(*m_face_map, edit_face->regions(), *m_seg_desc);
+            */
+            if (m_face_boundary->back().empty())
+                seg = calcSegmentation(frame.size(), input_face->second.regions(), *m_seg_desc);
+            else seg = calcSegmentation(*m_face_map, input_face->second.regions(), *m_seg_desc);
+
+            renderSegmentationBlend(frame, seg, 0.25f);
+        }
 
         renderBoundaries(frame, m_curr_hierarchy_level, *m_seg_desc, &m_seg_hierarchy->hierarchy());
 
         if(!m_face_boundary->back().empty())
             cv::drawContours(frame, *m_face_boundary, 0, cv::Scalar(0, 255, 0), 1);
-
-        /*
-        // Render landmarks
-        const sfl::Face* main_face = m_sfl_frames[m_curr_frame_ind]->getFace(m_main_face_id);
-        if(main_face != nullptr)
-            sfl::render(frame, main_face->landmarks);
-            */
     }
 
     void Editor::regionSelected(QMouseEvent * event)
     {
+        const segmentation::VectorMesh& mesh = m_seg_desc->vector_mesh();
+
         // Decide what to do with the selected regions
-        RegionType type = FULL;
-        bool insert = true;
+        PolygonType type = FULL;
+        //bool insert = true;
         switch (event->button())
         {
         case Qt::LeftButton: type = FULL; break;
         case Qt::RightButton: type = INTERSECTION; break;
-        case Qt::MiddleButton: insert = false; break;
+        //case Qt::MiddleButton: insert = false; break;
+        case Qt::MiddleButton: type = EMPTY; break;
         default: break;
         }
 
@@ -462,26 +474,98 @@ namespace fvs
         std::cout << std::endl;
         */
         /*
-        Frame* frame = m_sequence_regions->mutable_frames(m_curr_frame_ind);
+        Frame* frame = m_input_regions->mutable_frames(m_curr_frame_ind);
         auto& faces = *frame->mutable_faces();
         Face& face = faces[(unsigned int)m_main_face_id];
         */
         Face& face = getFaceForEditing();
         auto& face_regions = *face.mutable_regions();
 
-        if (insert)
+        if (m_curr_hierarchy_level == 0)
         {
-            for (auto& r : parentMap[parent_id])
+            Region& edit_region = face_regions[id];
+            edit_region.set_id((unsigned int)id);
+            if (edit_region.polygons_size() == 0)    // Not initialized
             {
-                Region& face_region = face_regions[(unsigned int)r->id()];
-                face_region.set_id((unsigned int)r->id());
-                face_region.set_type(type);
+                // Copy region from input regions
+                const Frame& input_frame = m_input_regions->frames(m_curr_frame_ind);
+                auto& input_face_map = input_frame.faces();
+                auto& input_face = input_face_map.find(m_main_face_id);
+                if (input_face != input_face_map.end())
+                {
+                    auto& input_region_map = input_face->second.regions();
+                    auto& input_region = input_region_map.find(id);
+                    if (input_region != input_region_map.end())
+                        edit_region = input_region->second;
+                }
+            }
+         
+            if (edit_region.polygons_size() == 0)    // Still not initialized
+            {
+                // Initialize all polygons to empty
+                const segmentation::Region2D* r = parentMap[id][0];
+
+                // For each polygon
+                for (const auto& poly : r->vectorization().polygon())
+                {
+                    if (poly.hole()) continue;
+                    if (poly.coord_idx_size() == 0) continue;
+                    edit_region.add_polygons(EMPTY);
+
+                    std::vector<std::vector<cv::Point>> contours;
+                    createContours(mesh, poly, contours);
+                }
+            }
+
+            // Change selected polygon
+            const segmentation::Region2D* r = parentMap[id][0];
+
+            // For each polygon
+            int poly_ind = 0;
+            for (const auto& poly : r->vectorization().polygon())
+            {
+                if (poly.hole()) continue;
+                if (poly.coord_idx_size() == 0) continue;
+                edit_region.add_polygons(EMPTY);
+
+                std::vector<std::vector<cv::Point>> contours;
+                createContours(mesh, poly, contours);
+
+                // Check if mouse click is inside the current polygon
+                if (cv::pointPolygonTest(contours.back(),
+                    cv::Point2f((float)event->x(), (float)event->y()), false) >= 0)
+                {
+                    edit_region.set_polygons(poly_ind, type);
+                    break;
+                }
+
+                ++poly_ind;
             }
         }
-        else    // Remove
+        else    // m_curr_hierarchy_level > 0
         {
+            // For each selected region
             for (auto& r : parentMap[parent_id])
-                face_regions.erase((unsigned int)r->id());
+            {
+                Region& edit_region = face_regions[(unsigned int)r->id()];
+                edit_region.set_id((unsigned int)r->id());
+
+                // For each polygon
+                if (edit_region.polygons_size() == 0)    // Not initialized
+                {
+                    for (const auto& poly : r->vectorization().polygon())
+                    {
+                        if (poly.hole()) continue;
+                        if (poly.coord_idx_size() == 0) continue;
+                        edit_region.add_polygons(type);
+                    }
+                }
+                else    // Polygons already exist
+                {
+                    for (int i = 0; i < edit_region.polygons_size(); ++i)
+                        edit_region.set_polygons(i, type);
+                }
+            }
         }
 
         m_refresh = true;

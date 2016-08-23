@@ -26,20 +26,20 @@
 //
 // ---
 
-#include "editor.h"
-#include <iostream>
-#include <string>
-#include <boost/program_options.hpp>
-#include <boost/filesystem.hpp>
-
+#include "landmarks_unit.h"
+#include "face_segmentation_unit.h"
+#include "video_writer_unit2.h"
+#include "keyframe_writer_unit.h"
 #include <video_framework/video_reader_unit.h>
 #include <video_framework/video_display_unit.h>
 #include <video_framework/video_writer_unit.h>
 #include <video_framework/video_pipeline.h>
 #include <segmentation/segmentation_unit.h>
-#include <video_display_qt/video_display_qt_unit.h>
 
-#include <QApplication>
+#include <iostream>
+#include <string>
+#include <boost/program_options.hpp>
+#include <boost/filesystem.hpp>
 
 using std::string;
 using std::cout;
@@ -47,13 +47,12 @@ using std::endl;
 using std::cerr;
 using namespace boost::program_options;
 using namespace boost::filesystem;
-using namespace video_framework;
-using namespace segmentation;
+using namespace fvs;
 
 int main(int argc, char* argv[])
 {
 	// Parse command line arguments
-	string inputPath, outputDir, segPath, landmarksPath, fvsPath;
+	string inputPath, outputDir, segPath, landmarksPath;
 	int device;
 	unsigned int width, height, verbose;
 	double fps, frame_scale;
@@ -65,9 +64,7 @@ int main(int argc, char* argv[])
 			("input,i", value<string>(&inputPath), "path to video file")
 			("output,o", value<string>(&outputDir), "output directory")
 			("segmentation,s", value<string>(&segPath), "input segmentation protobuffer (.pb)")
-            ("landmarks,l", value<string>(&landmarksPath), "path to landmarks cache (.pb)")
-            ("face_segmentation,f", value<string>(&fvsPath)->default_value(""), 
-                "path to face video segmentation (.fvs)")
+			("landmarks,l", value<string>(&landmarksPath), "path to landmarks model or cache (.pb)")
 			("verbose,v", value<unsigned int>(&verbose)->default_value(0), "output debug information")
 			;
 		variables_map vm;
@@ -83,14 +80,14 @@ int main(int argc, char* argv[])
 		if (vm.count("output") && !is_directory(outputDir))
 			throw error("output must be a path to a directory!");
 		if (!is_regular_file(segPath)) throw error("segmentation must be a path to a file!");
-        if (!is_regular_file(landmarksPath))
-        {
-            path input = path(inputPath);
-            landmarksPath =
-                (input.parent_path() / (input.stem() += "_landmarks.pb")).string();
-            if (!is_regular_file(landmarksPath))
-                throw error("Couldn't find landmarks model or cache file!");
-        }
+		if (!is_regular_file(landmarksPath))
+		{
+			path input = path(inputPath);
+			landmarksPath =
+				(input.parent_path() / (input.stem() += "_landmarks.pb")).string();
+			if (!is_regular_file(landmarksPath))
+				throw error("Couldn't find landmarks model or cache file!");
+		}
 	}
 	catch (const error& e) {
 		cout << "Error while parsing command-line arguments: " << e.what() << endl;
@@ -100,11 +97,6 @@ int main(int argc, char* argv[])
 
 	try
 	{
-        QApplication app(argc, argv);
-        fvs::Editor editor(inputPath, segPath, landmarksPath, fvsPath, outputDir);
-        editor.show();
-        return app.exec();
-        /*
         // Video Reader Unit
         VideoReaderUnit reader(VideoReaderOptions(), inputPath);
 
@@ -114,30 +106,34 @@ int main(int argc, char* argv[])
         SegmentationReaderUnit seg_reader(segOptions);
         seg_reader.AttachTo(&reader);
 
-        // Video display
-        SegmentationDisplayOptions seg_display_options;
-        seg_display_options.hierarchy_level = 0.1f;
-        std::unique_ptr<SegmentationDisplayUnit> display;
-        display.reset(new SegmentationDisplayUnit(seg_display_options));
-        display->AttachTo(&reader);
+        // Landmarks Unit
+        LandmarksOptions landmarks_options;
+        landmarks_options.landmarks_path = landmarksPath;
+        LandmarksUnit landmarks_unit(landmarks_options);
+        landmarks_unit.AttachTo(&seg_reader);
 
-        //std::unique_ptr<VideoDisplayQtUnit> display;
-        //display.reset(new VideoDisplayQtUnit(VideoDisplayQtOptions()));
-        //display->AttachTo(&reader);
+        // Face Regions Unit
+        FaceRegionsOptions face_regions_options;
+        FaceRegionsUnit face_regions_unit(face_regions_options);
+        face_regions_unit.AttachTo(&landmarks_unit);
+
+        // TODO: Add keyframe detection unit
 
         // Prepare processing
         if (!reader.PrepareProcessing())
             throw std::runtime_error("Video framework setup failed.");
 
-        // Run with rate limitation.
-        RatePolicy rate_policy;
-        // Speed up playback for fun :)
-        rate_policy.max_rate = 45;
-
         // This call will block and return when the whole has been displayed.
-        if (!reader.RunRateLimited(rate_policy))
+        if (!reader.Run())
             throw std::runtime_error("Could not process video file.");
-            */
+
+        // Write output to file
+        boost::filesystem::path orig = inputPath;
+        std::string fvs_out_path = (boost::filesystem::path(outputDir) /
+            (orig.stem() += ".fvs")).string();
+        std::cout << "Writing face video segmentation to \"" <<
+            fvs_out_path << "\"." << std::endl;
+        face_regions_unit.save(fvs_out_path);
 	}
 	catch (std::exception& e)
 	{

@@ -64,6 +64,7 @@ namespace fvs
 {
     class Sequence;
     class Face;
+    enum PolygonType;
     class Keyframer;
 
 	class Editor : public QMainWindow
@@ -72,7 +73,8 @@ namespace fvs
 
 	public:
         explicit Editor(const std::string& video_file, const std::string& seg_file,
-            const std::string& landmarks_file, const std::string& output_dir = "");
+            const std::string& landmarks_file, const std::string& fvs_path = "",
+            const std::string& output_dir = "");
         ~Editor();
 
     protected:
@@ -143,8 +145,10 @@ namespace fvs
         int m_hierarchy_pos;
 
         // Face segmentation
-        std::unique_ptr<Sequence> m_sequence_regions;
+        std::unique_ptr<Sequence> m_input_regions;
         std::unique_ptr<Sequence> m_edited_regions;
+        //std::unique_ptr<Sequence> m_inserted_regions;
+        //std::unique_ptr<Sequence> m_removed_regions;
         int m_edit_index;
         std::unique_ptr<std::vector<std::vector<cv::Point>>> m_face_boundary;
         std::unique_ptr<cv::Mat> m_face_map;

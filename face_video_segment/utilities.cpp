@@ -44,15 +44,12 @@ namespace fvs
 
         // For each region
         cv::Mat poly_map = cv::Mat::zeros(face_map.size(), CV_8U);
-        cv::Scalar region_color;
+        cv::Scalar poly_color;
         for (const auto& r : seg_desc.region())
         {
             if (r.vectorization().polygon().empty()) continue;
             auto& face_region = regions.find((unsigned int)r.id());
             if (face_region == regions.end()) continue;
-            RegionType type = face_region->second.type();
-            if (type == FULL) region_color = cv::Scalar(255, 255, 255);
-            else region_color = cv::Scalar(128, 128, 128);
 
             // Find holes
             std::vector<std::vector<cv::Point>> holes;
@@ -64,17 +61,24 @@ namespace fvs
             }
 
             // For each polygon
+            int poly_ind = 0;
             for (const auto& poly : r.vectorization().polygon())
             {
                 if (poly.hole()) continue;
                 if (poly.coord_idx_size() == 0) continue;
+                PolygonType type = face_region->second.polygons(poly_ind++);
+                if (type == EMPTY) continue;
                 std::vector<std::vector<cv::Point>> contours;
                 createContours(mesh, poly, contours);
 
                 if (!contours.empty())
                 {
+                    // Set polygon color
+                    if (type == FULL) poly_color = cv::Scalar(255, 255, 255);
+                    else poly_color = cv::Scalar(128, 128, 128);
+
                     // Render polygon
-                    cv::drawContours(poly_map, contours, 0, region_color, CV_FILLED);
+                    cv::drawContours(poly_map, contours, 0, poly_color, CV_FILLED);
 
                     // Remove holes
                     cv::drawContours(poly_map, holes, 0, cv::Scalar(0, 0, 0), CV_FILLED);
@@ -221,6 +225,19 @@ namespace fvs
                 ++img_data;
             }
         }
+    }
+
+    float getFaceDominantSide(const std::vector<cv::Point>& landmarks)
+    {
+        if (landmarks.size() != 68) return 0;
+
+        const cv::Point& center = landmarks[27];
+        const cv::Point& left_eye = landmarks[42];
+        const cv::Point& right_eye = landmarks[39];
+        float left_dist = cv::norm(center - left_eye);
+        float right_dist = cv::norm(center - right_eye);
+
+        return left_dist / (left_dist + right_dist);
     }
 
 }   // namespace fvs

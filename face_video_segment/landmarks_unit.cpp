@@ -91,23 +91,20 @@ namespace segmentation
 		cv::Mat image;
 		frame->MatView(&image);
 
-		const sfl::Face* face = nullptr;
+		const sfl::Frame* sfl_frame = nullptr;
 		if (sequence_it != sfl_->getSequence().end())
 		{
 			// Calculate landmarks
 			if (sfl_->getModel().empty())
-				face = (*sequence_it++)->getFace(main_face_id_);
-			else face = sfl_->addFrame(image).getFace(main_face_id_);
+                sfl_frame = (*sequence_it++).get();
+			else sfl_frame = &sfl_->addFrame(image);
 		}
 		
-
-		// Output landmarks
-		std::unique_ptr<std::vector<cv::Point>> landmarks_out(new std::vector<cv::Point>());
-		if (face != nullptr) *landmarks_out = face->landmarks;	
-
 		// Forward input
-		input->push_back(std::shared_ptr<PointerFrame<std::vector<cv::Point>>>(
-			new PointerFrame<std::vector<cv::Point>>(std::move(landmarks_out))));
+        input->push_back(std::shared_ptr<ValueFrame<const sfl::Frame*>>(
+            new ValueFrame<const sfl::Frame*>(sfl_frame)));
+//		input->push_back(std::shared_ptr<PointerFrame<std::vector<cv::Point>>>(
+//			new PointerFrame<std::vector<cv::Point>>(std::move(landmarks_out))));
 
 		output->push_back(input);
 	}

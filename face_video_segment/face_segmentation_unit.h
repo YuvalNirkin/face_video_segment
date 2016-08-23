@@ -32,6 +32,7 @@
 #include "base/base.h"
 #include "video_framework/video_unit.h"
 #include "segment_util/segmentation_util.h"
+#include "face_regions.h"
 
 namespace fvs
 {
@@ -171,6 +172,44 @@ namespace fvs
 		// Holds the segmentation for the current chunk.
 		std::unique_ptr<SegmentationDesc> seg_hier_;
 	};
+
+    struct FaceRegionsOptions {
+        std::string stream_name = "FaceRegionsStream";
+        std::string video_stream_name = "VideoStream";
+        std::string segment_stream_name = "SegmentationStream";
+        std::string landmarks_stream_name = "LandmarksStream";
+    };
+
+    class FaceRegionsUnit : public video_framework::VideoUnit
+    {
+    public:
+        FaceRegionsUnit(const FaceRegionsOptions& options);
+        ~FaceRegionsUnit();
+
+        FaceRegionsUnit(const FaceRegionsUnit&) = delete;
+        FaceRegionsUnit& operator=(const FaceRegionsUnit&) = delete;
+
+        virtual bool OpenStreams(video_framework::StreamSet* set);
+        virtual void ProcessFrame(video_framework::FrameSetPtr input, std::list<video_framework::FrameSetPtr>* output);
+        virtual bool PostProcess(std::list<video_framework::FrameSetPtr>* append);
+
+        /** @brief Save current sequence of face segmentations to file.
+        */
+        virtual void save(const std::string& filePath) const;
+
+    private:
+        FaceRegionsOptions options_;
+        int video_stream_idx_;
+        int landmarks_stream_idx_;
+        int seg_stream_idx_;
+
+        int frame_width_;
+        int frame_height_;
+        int frame_number_ = 0;
+
+        std::unique_ptr<FaceRegions> face_regions_;
+        std::unique_ptr<Sequence> m_fvs_sequence;
+    };
 
 	struct FaceSegmentationRendererOptions {
 		std::string stream_name = "FaceSegmentationRendererStream";

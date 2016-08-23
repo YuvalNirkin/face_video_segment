@@ -51,6 +51,8 @@ namespace fvs
         const cv::Scalar& full_color = cv::Scalar(0, 0, 255),
         const cv::Scalar& intersection_color = cv::Scalar(255, 0, 0));
 
+    float getFaceDominantSide(const std::vector<cv::Point>& landmarks);
+
 }   // namespace fvs
 
 #endif	// __FVG_UTILITIES__

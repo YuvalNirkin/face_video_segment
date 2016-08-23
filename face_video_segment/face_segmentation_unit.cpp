@@ -43,21 +43,6 @@ using namespace segmentation;
 
 namespace fvs
 {
-	// Utilities
-
-	float getFaceDominantSide(const std::vector<cv::Point>& landmarks)
-	{
-		if (landmarks.size() != 68) return 0;
-
-		const cv::Point& center = landmarks[27];
-		const cv::Point& left_eye = landmarks[42];
-		const cv::Point& right_eye = landmarks[39];
-		float left_dist = cv::norm(center - left_eye);
-		float right_dist = cv::norm(center - right_eye);
-
-		return left_dist / (left_dist + right_dist);
-	}
-
 	FaceSegmentationUnit::FaceSegmentationUnit(const FaceSegmentationOptions& options)
 		: options_(options)
 	{
@@ -849,6 +834,102 @@ namespace fvs
 		/////////////
 		*/
 	}
+
+    FaceRegionsUnit::FaceRegionsUnit(const FaceRegionsOptions& options)
+        : options_(options)
+    {
+        face_regions_.reset(new FaceRegions());
+        m_fvs_sequence.reset(new Sequence());
+    }
+
+    FaceRegionsUnit::~FaceRegionsUnit() {
+    }
+
+    bool FaceRegionsUnit::OpenStreams(StreamSet* set)
+    {
+        // Find video stream idx.
+        video_stream_idx_ = FindStreamIdx(options_.video_stream_name, set);
+
+        if (video_stream_idx_ < 0) {
+            LOG(ERROR) << "Could not find Video stream!\n";
+            return false;
+        }
+
+        const VideoStream& vid_stream = set->at(video_stream_idx_)->As<VideoStream>();
+
+        frame_width_ = vid_stream.frame_width();
+        frame_height_ = vid_stream.frame_height();
+
+        // Get segmentation stream.
+        seg_stream_idx_ = FindStreamIdx(options_.segment_stream_name, set);
+        if (seg_stream_idx_ < 0) {
+            LOG(ERROR) << "SegmentationRenderUnit::OpenStreams: "
+                << "Could not find Segmentation stream!\n";
+            return false;
+        }
+
+        // Get landmarks stream
+        landmarks_stream_idx_ = FindStreamIdx(options_.landmarks_stream_name, set);
+        if (landmarks_stream_idx_ < 0) {
+            LOG(ERROR) << "SegmentationRenderUnit::OpenStreams: "
+                << "Could not find landmarks stream!\n";
+            return false;
+        }
+
+        // Add stream.
+        set->push_back(shared_ptr<DataStream>(new DataStream(options_.stream_name)));
+
+        return true;
+    }
+
+    void FaceRegionsUnit::ProcessFrame(FrameSetPtr input, std::list<FrameSetPtr>* output)
+    {
+        // Retrieve video frame
+        const VideoFrame* vid_frame = input->at(video_stream_idx_)->AsPtr<VideoFrame>();
+        cv::Mat frame;
+        vid_frame->MatView(&frame);
+
+        // Retrieve Segmentation.
+        const PointerFrame<SegmentationDesc>& seg_frame =
+            input->at(seg_stream_idx_)->As<PointerFrame<SegmentationDesc>>();
+        const SegmentationDesc& seg_desc = seg_frame.Ref();
+
+        // Retrieve landmarks
+        const ValueFrame<const sfl::Frame*>& landmarks_frame = 
+        input->at(landmarks_stream_idx_)->As<ValueFrame<const sfl::Frame*>>();
+        const sfl::Frame* sfl_frame = landmarks_frame.Value();
+//        const PointerFrame<std::vector<cv::Point>>& landmarks_frame =
+//            input->at(landmarks_stream_idx_)->As<PointerFrame<std::vector<cv::Point>>>();
+//        const std::vector<cv::Point>& landmarks = landmarks_frame.Ref();
+
+        // Add a new frame to the fvs sequence
+        Frame* fvs_frame = m_fvs_sequence->add_frames();
+        fvs_frame->set_id(frame_number_);
+        fvs_frame->set_width(frame_width_);
+        fvs_frame->set_height(frame_height_);
+        
+        // Calculate face regions
+        face_regions_->addFrame(seg_desc, *sfl_frame, *fvs_frame);
+
+        // Forward input
+        input->push_back(std::shared_ptr<ValueFrame<Frame*>>(
+            new ValueFrame<Frame*>(fvs_frame)));
+
+        output->push_back(input);
+        ++frame_number_;
+    }
+
+    bool FaceRegionsUnit::PostProcess(list<FrameSetPtr>* append)
+    {
+        return false;
+    }
+
+    void FaceRegionsUnit::save(const std::string & filePath) const
+    {
+        if (m_fvs_sequence->frames_size() == 0) return;
+        std::ofstream output(filePath, std::fstream::trunc | std::fstream::binary);
+        m_fvs_sequence->SerializeToOstream(&output);
+    }
 
 	FaceSegmentationRendererUnit::FaceSegmentationRendererUnit(
 		const FaceSegmentationRendererOptions& options,

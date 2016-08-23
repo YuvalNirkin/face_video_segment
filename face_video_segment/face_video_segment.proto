@@ -11,22 +11,21 @@ message Frame {
 	uint32 width = 2;
 	uint32 height = 3;
     map<uint32, Face> faces = 4;
-	//repeated Face faces = 4;
 }
 
 message Face {
 	uint32 id = 1;
-    map<uint32, Region> regions = 2;
-	//repeated Region regions = 2;
+    bool keyframe = 2;
+    map<uint32, Region> regions = 3;
 }
 
 message Region {
 	uint32 id = 1;
-    RegionType type = 2;
-	repeated bool polygons_selected = 3;
+	repeated PolygonType polygons = 3;
 }
 
-enum RegionType {
-    FULL = 0;
-    INTERSECTION = 1;
+enum PolygonType {
+    EMPTY = 0;
+    FULL = 1;
+    INTERSECTION = 2;
 }
