@@ -21,11 +21,13 @@ outputPath = fullfile(p.Results.outDir, 'output');
 segmentationsPath = fullfile(p.Results.outDir, 'face_segmentations');
 segTreesPath = fullfile(p.Results.outDir, 'seg_trees');
 landmarksPath = fullfile(p.Results.outDir, 'landmarks');
+fvsPath = fullfile(p.Results.outDir, 'fvs_files');
 if(~exist(outputPath, 'dir'))
     mkdir(outputPath);
     mkdir(segmentationsPath);
     mkdir(segTreesPath);
     mkdir(landmarksPath);
+    mkdir(fvsPath);
 end
 
 %% Parse input directory
@@ -89,16 +91,27 @@ for i = indices
         end
         cache_face_landmarks(vidFile, p.Results.landmarks, 'output', dstLandmarksPath, 'scales', scales, 'track', 1);
     end
-       
-    %% Face video segmentation
+    
+    %% Find regions
+    dstFvsFile = [vidName '.fvs'];
+    dstFvsPath = fullfile(fvsPath, dstFvsFile);
+    if(exist(dstFvsPath, 'file') == 2)
+        disp(['"' dstFvsFile '" already exists. Skipping finding regions.']);
+    else
+        disp(['Creating face video segmentation file "' dstFvsFile '".']);
+        fvs_find_regions(vidFile, fvsPath, dstLandmarksPath, dstSegTreePath, 'verbose', p.Results.verbose);
+    end
+    
+    %% Write keyframes
     vidOutDir = fullfile(outputPath, vidName);
     if(exist(vidOutDir, 'dir') == 7)
-        disp(['"' vidName '" directory already exists. Skipping face video segmentation.']);
+        disp(['"' vidName '" directory already exists. Skipping writing keyframes.']);
     else
-        disp(['Creating face video segmentation in the directory "' vidName '".']);
+        disp(['Writing keyframes to the directory "' vidName '".']);
         mkdir(vidOutDir);
-        fvs_local(vidFile, vidOutDir, dstLandmarksPath, dstSegTreePath, 'verbose', p.Results.verbose);
-    end
+        fvs_write_keyframes(vidFile, vidOutDir, dstLandmarksPath, dstSegTreePath, dstFvsPath, 'verbose', p.Results.verbose);
+    end   
+    
 end
 
 function b = is_video(file)

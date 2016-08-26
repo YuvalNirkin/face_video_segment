@@ -36,6 +36,9 @@
 #include <sfl/sequence_face_landmarks.h>
 #include <sfl/utilities.h>
 
+// boost
+#include <boost/filesystem.hpp>
+
 // segmentation
 #include <segment_util/segmentation_io.h>
 #include <segment_util/segmentation_util.h>
@@ -58,7 +61,10 @@
 #include <QMouseEvent>
 #include <QCoreApplication>
 #include <QStyle>
+#include <QComboBox>
 #include <QToolButton>
+
+using namespace boost::filesystem;
 
 namespace fvs
 {
@@ -70,6 +76,7 @@ namespace fvs
         m_slider_pause(false),
         m_update_pending(false),
         m_update_frame(true),
+        m_update_face(false),
         m_curr_frame_ind(0),
         m_next_frame_ind(-1),
         m_frame_width(0), m_frame_height(0),
@@ -77,7 +84,8 @@ namespace fvs
         m_total_frames(0),
         m_main_face_id(0),
         m_hierarchy_pos(0),
-        m_edit_index(-1)
+        m_edit_index(-1),
+        m_curr_face_id(0)
     {
         // Initialize video capture
         m_cap.reset(new cv::VideoCapture());
@@ -104,7 +112,7 @@ namespace fvs
             throw std::runtime_error(
                 "The number of landmark frames does not match the number of video frames!");
         const std::list<std::unique_ptr<sfl::Frame>>& sfl_frames_list =  m_sfl->getSequence();
-        m_main_face_id = sfl::getMainFaceID(sfl_frames_list);
+        m_curr_face_id = m_main_face_id = sfl::getMainFaceID(sfl_frames_list);
         m_sfl_frames.reserve(sfl_frames_list.size());
         for (auto& frame : sfl_frames_list)
             m_sfl_frames.push_back(frame.get());  
@@ -117,6 +125,9 @@ namespace fvs
         m_seg_hierarchy.reset(new segmentation::SegmentationDesc);
         m_seg_reader->ReadNextFrame(m_seg_hierarchy.get());
 
+        // Initialize keyframer
+        m_keyframer = std::make_unique<Keyframer>(10, 5);
+
         // Initialize face segmentation
         m_input_regions.reset(new Sequence());
         m_edited_regions.reset(new Sequence());
@@ -127,15 +138,25 @@ namespace fvs
         if (fvs_path.empty())   // Initialize empty faces
         {
             // For each frame in the sequence
+            auto& sfl_it = m_sfl->getSequence().begin();
             for (unsigned int i = 0; i < m_total_frames; ++i)
             {
-                Frame* frame = m_input_regions->add_frames();
-                frame->set_id(0);
-                frame->set_width(m_frame_width);
-                frame->set_height(m_frame_height);
-                auto& faces = *frame->mutable_faces();
-                Face& face = faces[m_main_face_id];
-                face.set_id(m_main_face_id);
+                auto& sfl_frame = *sfl_it++;
+                Frame* fvs_frame = m_input_regions->add_frames();
+                fvs_frame->set_id(i);
+                fvs_frame->set_width(m_frame_width);
+                fvs_frame->set_height(m_frame_height);
+                auto& faces = *fvs_frame->mutable_faces();
+                
+                // For each face in the sfl frame
+                for (auto& sfl_face : sfl_frame->faces)
+                {
+                    Face& fvs_face = faces[sfl_face->id];
+                    fvs_face.set_id((unsigned int)sfl_face->id);
+                }
+
+                // Check for keyframes
+                m_keyframer->addFrame(*sfl_frame, *fvs_frame);
             }
         }
         else    // Read input regions from file
@@ -144,27 +165,19 @@ namespace fvs
             m_input_regions->ParseFromIstream(&input);
         }
 
-        // Initialize keyframer
-        m_keyframer = std::make_unique<Keyframer>(15, 5);
-        for (auto& frame : m_sfl->getSequence())
+        // Get all face ids
+        for (const Frame& fvs_frame : m_input_regions->frames())
         {
-            const sfl::Face* face = frame->getFace(m_main_face_id);
-            if (face != nullptr && m_keyframer->addFrame(face->landmarks))
-                m_keyframes.push_back(frame->id);
-            else if (face == nullptr) 
-                m_keyframer->addFrame(std::vector<cv::Point>());
-            
+            for (auto& fvs_face : fvs_frame.faces())
+                m_face_ids.insert((int)fvs_face.second.id());
         }
-        /// Debug keyframes ///
-        //std::cout << "keyframes = " << std::endl;
-        //for (int id : m_keyframes) std::cout << id << ", ";
-        //std::cout << std::endl;
-        ///////////////////////
         
         // Create main widget
         m_main_widget = new QLabel(this);
         setCentralWidget(m_main_widget);
-        setWindowTitle("Face Video Segmentation Editor");
+        std::string title = (path(fvs_path).stem() += 
+            " - Face Video Segmentation Editor").string();
+        setWindowTitle(title.c_str());
 
         // Create simple widget used for display.
         m_display_widget = new QLabel(this);
@@ -212,6 +225,19 @@ namespace fvs
         m_max_hierarchy_label->setText(std::to_string(m_max_hierarchy_level - 1).c_str());
         m_max_hierarchy_label->setAlignment(Qt::AlignRight);
 
+        m_face_id_label = new QLabel(this);
+        m_face_id_label->setText("Face id: ");
+        m_face_id_label->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+
+        // Create combobox
+        m_face_id_combobox = new QComboBox(this);
+        for (int face_id : m_face_ids)
+        {
+            m_face_id_combobox->addItem(QString::number(face_id));
+        }
+        m_face_id_combobox->setCurrentText(QString::number(m_curr_face_id));
+        connect(m_face_id_combobox, SIGNAL(currentTextChanged(const QString&)), this, SLOT(currFaceIdChanged(const QString&)));
+
         // Create buttons
         m_play_button = new QToolButton(this);
         m_play_button->setIcon(style()->standardIcon(QStyle::SP_MediaPause));
@@ -222,8 +248,6 @@ namespace fvs
         m_next_keyframe_button = new QToolButton(this);
         m_next_keyframe_button->setIcon(style()->standardIcon(QStyle::SP_MediaSeekForward));
         connect(m_next_keyframe_button, SIGNAL(clicked()), this, SLOT(nextKeyFrameButtonClicked()));
-
-        //;
 
         // GUI layout
         QGridLayout* centralLayout = new QGridLayout;
@@ -236,6 +260,8 @@ namespace fvs
         centralLayout->addWidget(m_curr_hierarchy_label, 2, 1);
         centralLayout->addWidget(m_hierarchy_slider, 2, 2);
         centralLayout->addWidget(m_max_hierarchy_label, 2, 3);
+        centralLayout->addWidget(m_face_id_label, 3, 0);
+        centralLayout->addWidget(m_face_id_combobox, 3, 1);
         QHBoxLayout* buttonLayout = new QHBoxLayout;
         buttonLayout->addStretch();
         buttonLayout->addWidget(m_previous_keyframe_button);
@@ -330,6 +356,7 @@ namespace fvs
         //std::cout << "update" << std::endl;
         //std::cout << "(" << m_curr_frame_ind << ", " << m_total_frames - 1 << ")" << std::endl;
 
+        // Update frame
         if (m_update_frame)
         {
             m_curr_frame_ind = (int)m_cap->get(cv::CAP_PROP_POS_FRAMES);
@@ -349,19 +376,24 @@ namespace fvs
                     //std::cout << "hierarchy size = " << m_seg_hierarchy->hierarchy_size() << std::endl;//
                 }
 
-                // Update face segmentation
-                const sfl::Face* face = m_sfl_frames[m_curr_frame_ind]->getFace(m_main_face_id);
-                if (face != nullptr)
-                {
-                    createFullFace(face->landmarks, m_face_boundary->back());
-                    *m_face_map = cv::Mat::zeros(m_scaled_frame->size(), CV_8U);
-                    cv::drawContours(*m_face_map, *m_face_boundary, 0, cv::Scalar(255, 255, 255), CV_FILLED);
-                }  
-                else m_face_boundary->back().clear();
-
-                m_refresh = true;
+                m_update_face = true;
                 m_update_frame = m_loop;
             }
+        }
+
+        // Update face
+        if (m_update_face)
+        {
+            // Update face segmentation
+            const sfl::Face* face = m_sfl_frames[m_curr_frame_ind]->getFace(m_curr_face_id);
+            if (face != nullptr)
+            {
+                createFullFace(face->landmarks, m_face_boundary->back());
+                *m_face_map = cv::Mat::zeros(m_scaled_frame->size(), CV_8U);
+                cv::drawContours(*m_face_map, *m_face_boundary, 0, cv::Scalar(255, 255, 255), CV_FILLED);
+            }
+            else m_face_boundary->back().clear();
+            m_refresh = true;
         }
 
         // Render
@@ -417,21 +449,44 @@ namespace fvs
 
         // Render segmentation
         auto& input_face_map = m_input_regions->frames(m_curr_frame_ind).faces();
-        auto& input_face = input_face_map.find(m_main_face_id);
-        // TODO: copy input regions and override with selected regions
-        cv::Mat seg;
+        auto& input_face = input_face_map.find(m_curr_face_id);
         Face* edit_face = getNearestEditedFace();
+        google::protobuf::Map<google::protobuf::uint32, fvs::Region> region_map;
+        if (input_face != input_face_map.end())
+            region_map = input_face->second.regions();
+        else if(edit_face != nullptr)
+            region_map = edit_face->regions();
+
+        // Overide edited regions
+        if (edit_face != nullptr && input_face != input_face_map.end())
+        {
+            for (auto& edit_region : edit_face->regions())
+            {
+                region_map[edit_region.second.id()] = edit_region.second;
+                //auto& render_region = region_map.find(edit_region.second.id());
+                //if (render_region == region_map.end()) continue;
+                //render_region->second = edit_region.second;
+            }
+        }
+        
+        cv::Mat seg;
+        
         //if (edit_face != nullptr)
-        if(input_face != input_face_map.end())
+        //if(input_face != input_face_map.end())
         {
             /*
             if (m_face_boundary->back().empty())
                 seg = calcSegmentation(frame.size(), edit_face->regions(), *m_seg_desc);
             else seg = calcSegmentation(*m_face_map, edit_face->regions(), *m_seg_desc);
             */
+            /*
             if (m_face_boundary->back().empty())
                 seg = calcSegmentation(frame.size(), input_face->second.regions(), *m_seg_desc);
             else seg = calcSegmentation(*m_face_map, input_face->second.regions(), *m_seg_desc);
+            */
+            if (m_face_boundary->back().empty())
+                seg = calcSegmentation(frame.size(), region_map, *m_seg_desc);
+            else seg = calcSegmentation(*m_face_map, region_map, *m_seg_desc);
 
             renderSegmentationBlend(frame, seg, 0.25f);
         }
@@ -476,7 +531,7 @@ namespace fvs
         /*
         Frame* frame = m_input_regions->mutable_frames(m_curr_frame_ind);
         auto& faces = *frame->mutable_faces();
-        Face& face = faces[(unsigned int)m_main_face_id];
+        Face& face = faces[(unsigned int)m_curr_face_id];
         */
         Face& face = getFaceForEditing();
         auto& face_regions = *face.mutable_regions();
@@ -490,7 +545,7 @@ namespace fvs
                 // Copy region from input regions
                 const Frame& input_frame = m_input_regions->frames(m_curr_frame_ind);
                 auto& input_face_map = input_frame.faces();
-                auto& input_face = input_face_map.find(m_main_face_id);
+                auto& input_face = input_face_map.find(m_curr_face_id);
                 if (input_face != input_face_map.end())
                 {
                     auto& input_region_map = input_face->second.regions();
@@ -536,6 +591,8 @@ namespace fvs
                     cv::Point2f((float)event->x(), (float)event->y()), false) >= 0)
                 {
                     edit_region.set_polygons(poly_ind, type);
+                    std::cout << "Selected region " << id << " poly " << poly_ind << 
+                        " [0, " << r->vectorization().polygon_size() << "]" << std::endl;//
                     break;
                 }
 
@@ -612,14 +669,14 @@ namespace fvs
 
         // Get edit face
         auto& face_map = *edit_frame->mutable_faces();
-        Face& edit_face = face_map[(unsigned int)m_main_face_id];
-        edit_face.set_id((unsigned int)m_main_face_id);
+        Face& edit_face = face_map[(unsigned int)m_curr_face_id];
+        edit_face.set_id((unsigned int)m_curr_face_id);
 
         // Inherit regions from nearest edit frame
         if (nearest_edit_frame != nullptr)
         {
             auto& nearest_face_map = *nearest_edit_frame->mutable_faces();
-            Face& nearest_edit_face = nearest_face_map[(unsigned int)m_main_face_id];
+            Face& nearest_edit_face = nearest_face_map[(unsigned int)m_curr_face_id];
             for (auto& r : *nearest_edit_face.mutable_regions())
                 (*edit_face.mutable_regions())[r.first] = r.second;
         }
@@ -639,7 +696,7 @@ namespace fvs
             if (frame.id() <= m_curr_frame_ind)
             {
                 auto& face_map = *frame.mutable_faces();
-                edit_face = &face_map[(unsigned int)m_main_face_id];
+                edit_face = &face_map[(unsigned int)m_curr_face_id];
                 if(frame.id() == m_curr_frame_ind) break;
             }
         }
@@ -669,6 +726,18 @@ namespace fvs
 
     void Editor::previousKeyFrameButtonClicked()
     {
+        for (int i = m_curr_frame_ind - 1; i >= 0; --i)
+        {
+            auto& face_map = m_input_regions->frames(i).faces();
+            auto& face = face_map.find(m_curr_face_id);
+            if (face == face_map.end()) continue;
+            if (face->second.keyframe())
+            {
+                seek(i);
+                break;
+            }
+        }
+        /*
         if (m_keyframes.empty()) return;
         for (int i = (int)m_keyframes.size() - 1; i >= 0; --i)
         {
@@ -678,10 +747,23 @@ namespace fvs
                 break;
             }
         }     
+        */
     }
 
     void Editor::nextKeyFrameButtonClicked()
     {
+        for (int i = m_curr_frame_ind + 1; i < m_total_frames; ++i)
+        {
+            auto& face_map = m_input_regions->frames(i).faces();
+            auto& face = face_map.find(m_curr_face_id);
+            if (face == face_map.end()) continue;
+            if (face->second.keyframe())
+            {
+                seek(i);
+                break;
+            }
+        }
+        /*
         if (m_keyframes.empty()) return;
         for (size_t i = 0; i < m_keyframes.size(); ++i)
         {
@@ -690,7 +772,16 @@ namespace fvs
                 seek(m_keyframes[i]);
                 break;
             }
-        }      
+        }
+        */
+    }
+
+    void Editor::currFaceIdChanged(const QString& text)
+    {
+        m_curr_face_id = text.toInt();
+        //std::cout << "curr face id = " << m_curr_face_id << std::endl;//
+        m_update_face = true;
+        updateLater();
     }
 
     void Editor::frameSliderPress()

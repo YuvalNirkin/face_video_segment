@@ -29,7 +29,7 @@
 #include "landmarks_unit.h"
 #include "face_segmentation_unit.h"
 #include "video_writer_unit2.h"
-#include "keyframe_writer_unit.h"
+#include "keyframe_unit.h"
 #include <video_framework/video_reader_unit.h>
 #include <video_framework/video_display_unit.h>
 #include <video_framework/video_writer_unit.h>
@@ -117,7 +117,10 @@ int main(int argc, char* argv[])
         FaceRegionsUnit face_regions_unit(face_regions_options);
         face_regions_unit.AttachTo(&landmarks_unit);
 
-        // TODO: Add keyframe detection unit
+        // Keyframe Detection Unit
+        KeyframeDetectionOptions keyframe_detection_options;
+        KeyframeDetectionUnit keyframe_detection_unit(keyframe_detection_options);
+        keyframe_detection_unit.AttachTo(&face_regions_unit);
 
         // Prepare processing
         if (!reader.PrepareProcessing())

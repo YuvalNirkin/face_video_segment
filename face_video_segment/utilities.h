@@ -38,6 +38,8 @@ namespace fvs
         const segmentation::Hierarchy* seg_hier,
         const cv::Scalar& color = cv::Scalar(255, 255, 255));
 
+    void renderSegmentation(cv::Mat& img, const cv::Mat& seg, uchar color);
+
     /** Render segmentation blended with image
     @param img The image that the segmentation will be blended with.
     @seg The segmentation as an 8-bit image.

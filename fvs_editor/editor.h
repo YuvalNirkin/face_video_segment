@@ -29,8 +29,14 @@
 #ifndef __FVS_EDITOR_H__
 #define __FVS_EDITOR_H__
 
+// std
 #include <memory>
+#include <set>
+
+// Qt
 #include <QMainWindow>
+
+// OpenCV
 #include <opencv2/core/types.hpp>
 
 // Forward declarations
@@ -39,7 +45,9 @@ class QImage;
 class QSlider;
 class QMouseEvent;
 class QKeyEvent;
+class QComboBox;
 class QToolButton;
+class QString;
 
 namespace cv
 {
@@ -100,6 +108,7 @@ namespace fvs
         void playButtonClicked();
         void previousKeyFrameButtonClicked();
         void nextKeyFrameButtonClicked();
+        void currFaceIdChanged(const QString& text);
         
     private:
         QLabel* m_main_widget;
@@ -112,6 +121,8 @@ namespace fvs
         QLabel* m_hierarchy_label;
         QLabel* m_curr_hierarchy_label;
         QLabel* m_max_hierarchy_label;
+        QLabel* m_face_id_label;
+        QComboBox* m_face_id_combobox;
         QToolButton* m_play_button;
         QToolButton* m_previous_keyframe_button;
         QToolButton* m_next_keyframe_button;
@@ -121,6 +132,7 @@ namespace fvs
         bool m_slider_pause;
         bool m_update_pending;
         bool m_update_frame;
+        bool m_update_face;
 
         int m_curr_frame_ind;
         int m_next_frame_ind;
@@ -153,7 +165,9 @@ namespace fvs
         std::unique_ptr<std::vector<std::vector<cv::Point>>> m_face_boundary;
         std::unique_ptr<cv::Mat> m_face_map;
         std::unique_ptr<Keyframer> m_keyframer;
-        std::vector<int> m_keyframes;
+        //std::vector<int> m_keyframes;
+        int m_curr_face_id;
+        std::set<int> m_face_ids;
 
         int m_frame_width, m_frame_height;
         double m_fps;

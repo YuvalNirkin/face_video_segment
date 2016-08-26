@@ -26,8 +26,8 @@
 //
 // ---
 
-#ifndef FACE_VIDEO_SEGMENT_KEYFRAME_WRITER_UNIT_H__
-#define FACE_VIDEO_SEGMENT_KEYFRAME_WRITER_UNIT_H__
+#ifndef FVS_KEYFRAME_UNIT_H__
+#define FVS_KEYFRAME_UNIT_H__
 
 #include "base/base.h"
 #include "video_framework/video_unit.h"
@@ -37,26 +37,59 @@
 
 namespace fvs {
 
+    struct KeyframeDetectionOptions {
+        std::string video_stream_name = "VideoStream";
+        std::string segment_stream_name = "SegmentationStream";
+        std::string landmarks_stream_name = "LandmarksStream";
+        std::string face_regions_stream_name = "FaceRegionsStream";
+        int start_frame = 10;
+        int stability_range = 5;
+        bool debug = false;
+    };
+
+    class KeyframeDetectionUnit : public video_framework::VideoUnit {
+    public:
+    public:
+        KeyframeDetectionUnit(const KeyframeDetectionOptions& options);
+        ~KeyframeDetectionUnit();
+
+        KeyframeDetectionUnit(const KeyframeDetectionUnit&) = delete;
+        KeyframeDetectionUnit& operator=(const KeyframeDetectionUnit&) = delete;
+
+        virtual bool OpenStreams(video_framework::StreamSet* set);
+        virtual void ProcessFrame(video_framework::FrameSetPtr input, std::list<video_framework::FrameSetPtr>* output);
+        virtual bool PostProcess(std::list<video_framework::FrameSetPtr>* append);
+
+    private:
+        KeyframeDetectionOptions options_;
+        std::string output_dir_;
+        std::string src_name_;
+
+        int video_stream_idx_;
+        int landmarks_stream_idx_;
+        int face_regions_stream_idx_;
+
+        int frame_number_ = 0;
+        std::unique_ptr<Keyframer> keyframer_;
+    };
+
 	struct KeyframeWriterOptions {
 		std::string video_stream_name = "VideoStream";
 		std::string segment_stream_name = "SegmentationStream";
 		std::string landmarks_stream_name = "LandmarksStream";
-        std::string face_segment_stream_name = "FaceSegmentationStream";
-		std::string face_segment_renderer_stream_name = "FaceSegmentationRendererStream";
-		int start_frame = 10;
-        int stability_range = 5;
+        std::string face_regions_stream_name = "FaceRegionsStream";
         bool debug = false;
 	};
 
-	class KeyframeWriter : public video_framework::VideoUnit {
+	class KeyframeWriterUnit : public video_framework::VideoUnit {
 	public:
 	public:
-		KeyframeWriter(const KeyframeWriterOptions& options,
+		KeyframeWriterUnit(const KeyframeWriterOptions& options,
 			const std::string& output_dir, const std::string& src_name);
-		~KeyframeWriter();
+		~KeyframeWriterUnit();
 
-		KeyframeWriter(const KeyframeWriter&) = delete;
-		KeyframeWriter& operator=(const KeyframeWriter&) = delete;
+		KeyframeWriterUnit(const KeyframeWriterUnit&) = delete;
+		KeyframeWriterUnit& operator=(const KeyframeWriterUnit&) = delete;
 
 		virtual bool OpenStreams(video_framework::StreamSet* set);
 		virtual void ProcessFrame(video_framework::FrameSetPtr input, std::list<video_framework::FrameSetPtr>* output);
@@ -68,12 +101,10 @@ namespace fvs {
 		std::string src_name_;
 
 		int video_stream_idx_;
+        int seg_stream_idx_;
 		int landmarks_stream_idx_;
-        int face_seg_stream_idx_;
-		int face_segment_renderer_stream_idx_;
-
+        int face_regions_stream_idx_;
 		int frame_number_ = 0;
-        std::unique_ptr<Keyframer> keyframer_;
 	};
 
 }  // namespace fvs

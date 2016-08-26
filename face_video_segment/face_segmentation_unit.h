@@ -173,6 +173,30 @@ namespace fvs
 		std::unique_ptr<SegmentationDesc> seg_hier_;
 	};
 
+    struct FaceRegionsReaderOptions {
+        std::string stream_name = "FaceRegionsStream";
+    };
+
+    class FaceRegionsReaderUnit : public video_framework::VideoUnit
+    {
+    public:
+        FaceRegionsReaderUnit(const FaceRegionsReaderOptions& options,
+            const std::string& fvs_path);
+        ~FaceRegionsReaderUnit();
+
+        FaceRegionsReaderUnit(const FaceRegionsReaderUnit&) = delete;
+        FaceRegionsReaderUnit& operator=(const FaceRegionsReaderUnit&) = delete;
+
+        virtual bool OpenStreams(video_framework::StreamSet* set);
+        virtual void ProcessFrame(video_framework::FrameSetPtr input, std::list<video_framework::FrameSetPtr>* output);
+        virtual bool PostProcess(std::list<video_framework::FrameSetPtr>* append);
+
+    private:
+        FaceRegionsReaderOptions options_;
+        std::unique_ptr<Sequence> fvs_sequence_;
+        int frame_number_ = 0;
+    };
+
     struct FaceRegionsOptions {
         std::string stream_name = "FaceRegionsStream";
         std::string video_stream_name = "VideoStream";
@@ -247,8 +271,6 @@ namespace fvs
 		void renderSegmentation(cv::Mat& frame, const cv::Mat& seg);
 
 		void renderSegmentation(cv::Mat& frame, const cv::Mat& seg, const cv::Scalar& color);
-
-        void renderSegmentation(cv::Mat& frame, const cv::Mat& seg, uchar color);
 
 		void renderBoundaries(cv::Mat& frame, const SegmentationDesc& seg_desc);
 

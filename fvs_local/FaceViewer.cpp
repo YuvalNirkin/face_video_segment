@@ -30,7 +30,7 @@
 #include "landmarks_unit.h"
 #include "face_segmentation_unit.h"
 #include "video_writer_unit2.h"
-#include "keyframe_writer_unit.h"
+#include "keyframe_unit.h"
 #include <video_framework/video_reader_unit.h>
 #include <video_framework/video_display_unit.h>
 #include <video_framework/video_writer_unit.h>
@@ -548,9 +548,9 @@ namespace fvs
 
 			// Keyframe writer
 			KeyframeWriterOptions keyframe_writer_options;
-            keyframe_writer_options.face_segment_stream_name = face_seg_local_options.stream_name;
+            //keyframe_writer_options.face_segment_stream_name = face_seg_local_options.stream_name;
             keyframe_writer_options.debug = m_verbose > 1;
-			KeyframeWriter keyframe_writer(keyframe_writer_options, m_output_dir,
+            KeyframeWriterUnit keyframe_writer(keyframe_writer_options, m_output_dir,
 				orig.stem().string());
 			if (!m_output_dir.empty())
 				keyframe_writer.AttachTo(input);

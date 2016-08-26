@@ -29,27 +29,48 @@
 #ifndef FVS_KEYFRAMER_H__
 #define FVS_KEYFRAMER_H__
 
+#include "face_video_segment.pb.h"
+
+// std
 #include <list>
+
+// sfl
+#include <sfl/sequence_face_landmarks.h>
+
+// OpenCV
 #include <opencv2/core.hpp>
 
 namespace fvs {
 
-	struct Keyframe
-	{
-		int id;
-		cv::Point3f euler_angles;
-	};
-
     class Keyframer
     {
     public:
+
+        struct Keyframe
+        {
+            int id;
+            cv::Point3f euler_angles;
+        };
+
+        struct FaceData
+        {
+            std::list<Keyframe> keyframes;
+            std::list<std::vector<cv::Point>> history;
+            int frame_updated_ind;
+        };
+
         Keyframer(int start_frame = 10, int stability_range = 5);
 
-        bool addFrame(const std::vector<cv::Point>& landmarks);
+        void addFrame(const sfl::Frame& sfl_frame, Frame& fvs_frame);
 
     private:
-        std::list<Keyframe> m_keyframes;
-        std::list<std::vector<cv::Point>> m_history;
+
+        bool addFace(const sfl::Face& sfl_face, Face& fvs_face);
+
+    private:
+        //std::list<Keyframe> m_keyframes;
+        //std::list<std::vector<cv::Point>> m_history;
+        std::map<int, FaceData> m_face_data_map;
         int m_start_frame;
         int m_stability_range;
         int m_frame_counter;

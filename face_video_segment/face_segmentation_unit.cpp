@@ -835,6 +835,44 @@ namespace fvs
 		*/
 	}
 
+    FaceRegionsReaderUnit::FaceRegionsReaderUnit(const FaceRegionsReaderOptions& options,
+        const std::string& fvs_path)
+        : options_(options)
+    {
+        fvs_sequence_.reset(new Sequence());
+        std::ifstream input(fvs_path, std::ifstream::binary);
+        fvs_sequence_->ParseFromIstream(&input);
+    }
+
+    FaceRegionsReaderUnit::~FaceRegionsReaderUnit() {
+    }
+
+    bool FaceRegionsReaderUnit::OpenStreams(StreamSet* set)
+    {
+        // Add stream.
+        set->push_back(shared_ptr<DataStream>(new DataStream(options_.stream_name)));
+
+        return true;
+    }
+
+    void FaceRegionsReaderUnit::ProcessFrame(FrameSetPtr input, std::list<FrameSetPtr>* output)
+    {
+        // Get fvs frame from sequence
+        Frame* fvs_frame = fvs_sequence_->mutable_frames(frame_number_);
+
+        // Forward input
+        input->push_back(std::shared_ptr<ValueFrame<Frame*>>(
+            new ValueFrame<Frame*>(fvs_frame)));
+
+        output->push_back(input);
+        ++frame_number_;
+    }
+
+    bool FaceRegionsReaderUnit::PostProcess(list<FrameSetPtr>* append)
+    {
+        return false;
+    }
+
     FaceRegionsUnit::FaceRegionsUnit(const FaceRegionsOptions& options)
         : options_(options)
     {
@@ -903,14 +941,18 @@ namespace fvs
 //        const std::vector<cv::Point>& landmarks = landmarks_frame.Ref();
 
         // Add a new frame to the fvs sequence
-        Frame* fvs_frame = m_fvs_sequence->add_frames();
-        fvs_frame->set_id(frame_number_);
-        fvs_frame->set_width(frame_width_);
-        fvs_frame->set_height(frame_height_);
-        
-        // Calculate face regions
-        face_regions_->addFrame(seg_desc, *sfl_frame, *fvs_frame);
+        Frame* fvs_frame = nullptr;
+        if (sfl_frame != nullptr)
+        {
+            fvs_frame = m_fvs_sequence->add_frames();
+            fvs_frame->set_id(frame_number_);
+            fvs_frame->set_width(frame_width_);
+            fvs_frame->set_height(frame_height_);
 
+            // Calculate face regions
+            face_regions_->addFrame(seg_desc, *sfl_frame, *fvs_frame);
+        }
+        
         // Forward input
         input->push_back(std::shared_ptr<ValueFrame<Frame*>>(
             new ValueFrame<Frame*>(fvs_frame)));
@@ -1160,24 +1202,6 @@ namespace fvs
 			}
 		}
 	}
-
-    void FaceSegmentationRendererUnit::renderSegmentation(cv::Mat& frame, const cv::Mat& seg,
-        uchar color)
-    {
-        int r, c;
-        unsigned char* frame_data = frame.data;
-        const unsigned char* seg_data = seg.data;
-        for (r = 0; r < frame.rows; ++r)
-        {
-            seg_data = seg.ptr<uchar>(r);
-            frame_data = frame.ptr<uchar>(r);
-            for (c = 0; c < frame.cols; ++c)
-            {
-                if (*seg_data++ > 0) *frame_data = color;
-                ++frame_data;
-            }
-        }
-    }
 
 	void FaceSegmentationRendererUnit::renderBoundaries(cv::Mat& frame,
 		const SegmentationDesc& seg_desc)

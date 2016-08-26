@@ -193,6 +193,25 @@ namespace fvs
         }
     }
 
+    void renderSegmentation(cv::Mat& img, const cv::Mat& seg, uchar color)
+    {
+        if (img.size() != seg.size()) img.create(seg.size(), seg.type());
+
+        int r, c;
+        unsigned char* img_data = img.data;
+        const unsigned char* seg_data = seg.data;
+        for (r = 0; r < img.rows; ++r)
+        {
+            seg_data = seg.ptr<uchar>(r);
+            img_data = img.ptr<uchar>(r);
+            for (c = 0; c < img.cols; ++c)
+            {
+                if (*seg_data++ > 0) *img_data = color;
+                ++img_data;
+            }
+        }
+    }
+
     void renderSegmentationBlend(cv::Mat& img, const cv::Mat& seg, float alpha,
         const cv::Scalar& full_color, const cv::Scalar& intersection_color)
     {

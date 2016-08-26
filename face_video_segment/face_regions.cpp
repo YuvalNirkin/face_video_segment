@@ -61,6 +61,7 @@ namespace fvs
     {
         auto& faces = *fvs_frame.mutable_faces();
         Face& fvs_face = faces[sfl_face.id];
+        fvs_face.set_id(sfl_face.id);
         auto& regions = *fvs_face.mutable_regions();
         const VectorMesh& mesh = seg_desc.vector_mesh();
         cv::Mat face_map = createFaceMap(

@@ -41,21 +41,46 @@ namespace fvs
     {
     }
 
-    bool Keyframer::addFrame(const std::vector<cv::Point>& landmarks)
+    void Keyframer::addFrame(const sfl::Frame& sfl_frame, Frame& fvs_frame)
     {
-        ++m_frame_counter;
+        auto& fvs_face_map = *fvs_frame.mutable_faces();
 
-        // Check if a face was found this frame
-        if (landmarks.empty())
+        // For each sfl face
+        for (auto& sfl_face : sfl_frame.faces)
         {
-            m_history.clear();
+            // Check to find a corresponding fvs face
+            auto& fvs_face = fvs_face_map.find(sfl_face->id);
+            if (fvs_face == fvs_face_map.end()) continue;
+
+            addFace(*sfl_face, fvs_face->second);
+        }
+
+        // Clear history for faces that were not found
+        for (auto& face_data : m_face_data_map)
+        {
+            if (face_data.second.frame_updated_ind < m_frame_counter)
+                face_data.second.history.clear();
+        }
+
+        ++m_frame_counter;
+    }
+
+    bool Keyframer::addFace(const sfl::Face& sfl_face, Face& fvs_face)
+    {
+        FaceData& face_data = m_face_data_map[sfl_face.id];
+        face_data.frame_updated_ind = m_frame_counter;
+
+        // Check if we the landmarks are not empty
+        if (sfl_face.landmarks.empty())
+        {
+            face_data.history.clear();
             return false;
         }
 
         // Update history
-        m_history.push_back(landmarks);
-        if (m_history.size() > m_stability_range)
-            m_history.pop_front();
+        face_data.history.push_back(sfl_face.landmarks);
+        if (face_data.history.size() > m_stability_range)
+            face_data.history.pop_front();
         else return false;
 
         // Check start frame
@@ -63,16 +88,16 @@ namespace fvs
             return false;
 
         // Compare against previous keyframes
-        cv::Point3f face_euler = sfl::getFaceApproxEulerAngles(landmarks);
-        for (Keyframe& kf : m_keyframes)
+        cv::Point3f face_euler = sfl::getFaceApproxEulerAngles(sfl_face.landmarks);
+        for (Keyframe& kf : face_data.keyframes)
         {
             float d = cv::norm(face_euler - kf.euler_angles);
             if (d < MIN_DIST) return false;
         }
 
         // Add new keyframe
-        m_keyframes.push_front({ m_frame_counter - 1 , face_euler });
-
+        face_data.keyframes.push_front({ m_frame_counter , face_euler });
+        fvs_face.set_keyframe(true);
         return true;
     }
 
