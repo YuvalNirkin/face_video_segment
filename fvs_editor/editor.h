@@ -68,10 +68,21 @@ namespace segmentation
     class SegmentationDesc;
 }
 
+namespace google
+{
+    namespace protobuf
+    {
+        template <typename Key, typename T>
+        class Map;
+    }
+}
+
 namespace fvs
 {
     class Sequence;
+    class Frame;
     class Face;
+    class Region;
     enum PolygonType;
     class Keyframer;
 
@@ -98,7 +109,10 @@ namespace fvs
         void render(cv::Mat& frame);
         void regionSelected(QMouseEvent* event);
         Face& getFaceForEditing();
+        Frame* getNearestEditedFrame();
         Face* getNearestEditedFace();
+        void getRegionsForRendering(
+            google::protobuf::Map<unsigned int, Region>& region_map);
 
     public slots:
         void frameIndexChanged(int);

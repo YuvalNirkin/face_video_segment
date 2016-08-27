@@ -446,7 +446,7 @@ namespace fvs
             &m_seg_hierarchy->hierarchy(),
             &frame);
             */
-
+        /*
         // Render segmentation
         auto& input_face_map = m_input_regions->frames(m_curr_frame_ind).faces();
         auto& input_face = input_face_map.find(m_curr_face_id);
@@ -468,29 +468,21 @@ namespace fvs
                 //render_region->second = edit_region.second;
             }
         }
+        */
         
+        // Get regions for rendering
+        google::protobuf::Map<google::protobuf::uint32, fvs::Region> region_map;
+        getRegionsForRendering(region_map);
+
+        // Calculate segmentation
         cv::Mat seg;
+        if (m_face_boundary->back().empty())
+            seg = calcSegmentation(frame.size(), region_map, *m_seg_desc);
+        else seg = calcSegmentation(*m_face_map, region_map, *m_seg_desc);
+
+        // Render segmentation
+        renderSegmentationBlend(frame, seg, 0.25f);
         
-        //if (edit_face != nullptr)
-        //if(input_face != input_face_map.end())
-        {
-            /*
-            if (m_face_boundary->back().empty())
-                seg = calcSegmentation(frame.size(), edit_face->regions(), *m_seg_desc);
-            else seg = calcSegmentation(*m_face_map, edit_face->regions(), *m_seg_desc);
-            */
-            /*
-            if (m_face_boundary->back().empty())
-                seg = calcSegmentation(frame.size(), input_face->second.regions(), *m_seg_desc);
-            else seg = calcSegmentation(*m_face_map, input_face->second.regions(), *m_seg_desc);
-            */
-            if (m_face_boundary->back().empty())
-                seg = calcSegmentation(frame.size(), region_map, *m_seg_desc);
-            else seg = calcSegmentation(*m_face_map, region_map, *m_seg_desc);
-
-            renderSegmentationBlend(frame, seg, 0.25f);
-        }
-
         renderBoundaries(frame, m_curr_hierarchy_level, *m_seg_desc, &m_seg_hierarchy->hierarchy());
 
         if(!m_face_boundary->back().empty())
@@ -567,8 +559,8 @@ namespace fvs
                     if (poly.coord_idx_size() == 0) continue;
                     edit_region.add_polygons(EMPTY);
 
-                    std::vector<std::vector<cv::Point>> contours;
-                    createContours(mesh, poly, contours);
+                    //std::vector<std::vector<cv::Point>> contours;
+                    //createContours(mesh, poly, contours);
                 }
             }
 
@@ -581,7 +573,7 @@ namespace fvs
             {
                 if (poly.hole()) continue;
                 if (poly.coord_idx_size() == 0) continue;
-                edit_region.add_polygons(EMPTY);
+                //edit_region.add_polygons(EMPTY);
 
                 std::vector<std::vector<cv::Point>> contours;
                 createContours(mesh, poly, contours);
@@ -592,7 +584,7 @@ namespace fvs
                 {
                     edit_region.set_polygons(poly_ind, type);
                     std::cout << "Selected region " << id << " poly " << poly_ind << 
-                        " [0, " << r->vectorization().polygon_size() << "]" << std::endl;//
+                        " [0, " << edit_region.polygons_size() - 1 << "]" << std::endl;//
                     break;
                 }
 
@@ -685,6 +677,24 @@ namespace fvs
         return edit_face;
     }
 
+    Frame * Editor::getNearestEditedFrame()
+    {
+        if (m_edited_regions->mutable_frames()->empty()) return nullptr;
+
+        // Find closest frame (assume sorted)
+        Frame* edit_frame = nullptr;
+        for (Frame& frame : *m_edited_regions->mutable_frames())
+        {
+            if (frame.id() <= m_curr_frame_ind)
+            {
+                edit_frame = &frame;
+                if (frame.id() == m_curr_frame_ind) break;
+            }
+        }
+
+        return edit_frame;
+    }
+
     Face* Editor::getNearestEditedFace()
     {
         if (m_edited_regions->mutable_frames()->empty()) return nullptr;
@@ -702,6 +712,76 @@ namespace fvs
         }
 
         return edit_face;
+    }
+
+    void Editor::getRegionsForRendering(
+        google::protobuf::Map<unsigned int, Region>& region_map)
+    {
+        auto& input_face_map = m_input_regions->frames(m_curr_frame_ind).faces();
+        auto& input_face = input_face_map.find(m_curr_face_id);
+        if (input_face != input_face_map.end())
+            region_map = input_face->second.regions();
+
+        Frame* edit_frame = getNearestEditedFrame();
+        if (edit_frame == nullptr) return;
+        auto& edit_face_map = *edit_frame->mutable_faces();
+        auto& edit_face = edit_face_map.find(m_curr_face_id);
+        if (edit_face == edit_face_map.end()) return;
+        auto& edit_region_map = edit_face->second.regions();
+
+        //Face* edit_face = getNearestEditedFace();
+        //if (edit_face == nullptr) return;
+        //auto& edit_region_map = edit_face->regions();
+
+        if (edit_frame->id() == m_curr_frame_ind)
+        {
+            // Overide edited regions
+            for (auto& edit_region : edit_region_map)
+                region_map[edit_region.second.id()] = edit_region.second;
+        }
+        else
+        {
+            // Only inherit totally full or empty edit regions
+            // For each region
+            for (const auto& r : m_seg_desc->region())
+            {
+                if (r.vectorization().polygon().empty()) continue;
+                auto& edit_region = edit_region_map.find((unsigned int)r.id());
+                if (edit_region == edit_region_map.end()) continue;
+                if (edit_region->second.polygons_size() == 0) continue;
+
+                // Check if to inherit
+                PolygonType type = edit_region->second.polygons(0);
+                bool inherit = true;
+                for (int i = 1; i < edit_region->second.polygons_size(); ++i)
+                {
+                    if (edit_region->second.polygons(i) != type)
+                    {
+                        inherit = false;
+                        break;
+                    }
+                }
+                if (!inherit) continue;
+
+                Region& region = region_map[(unsigned int)r.id()];
+                if (region.polygons_size() > 0) // Already initialized
+                {
+                    for (int i = 0; i < region.polygons_size(); ++i)
+                        region.set_polygons(i, type);
+                }
+                else    // Require initialization
+                {
+                    // For each polygon
+                    int poly_ind = 0;
+                    for (const auto& poly : r.vectorization().polygon())
+                    {
+                        if (poly.hole()) continue;
+                        if (poly.coord_idx_size() == 0) continue;
+                        region.add_polygons(type);
+                    }
+                }
+            }
+        }
     }
 
     void Editor::frameIndexChanged(int n)
