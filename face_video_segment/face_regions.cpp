@@ -188,6 +188,7 @@ namespace fvs
             if (add_region)
             {
                 Region& fvs_region = regions[r.id()];
+                fvs_region.set_id(r.id());
                 for (PolygonType type : poly_types)
                     fvs_region.add_polygons(type);
             }

@@ -202,6 +202,9 @@ namespace fvs
         std::string video_stream_name = "VideoStream";
         std::string segment_stream_name = "SegmentationStream";
         std::string landmarks_stream_name = "LandmarksStream";
+        std::string video_path = "";
+        std::string seg_path = "";
+        std::string landmarks_path = "";
     };
 
     class FaceRegionsUnit : public video_framework::VideoUnit

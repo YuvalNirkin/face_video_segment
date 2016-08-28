@@ -91,10 +91,14 @@ namespace fvs
         Q_OBJECT
 
 	public:
-        explicit Editor(const std::string& video_file, const std::string& seg_file,
-            const std::string& landmarks_file, const std::string& fvs_path = "",
-            const std::string& output_dir = "");
+        explicit Editor(const std::string& fvs_path, const std::string& output_dir = "",
+            const std::string& video_file = "", const std::string& seg_file = "",
+            const std::string& landmarks_file = "");
         ~Editor();
+
+    private:
+        // UI
+        void createMenu();
 
     protected:
         bool event(QEvent *event) Q_DECL_OVERRIDE;
@@ -111,8 +115,11 @@ namespace fvs
         Face& getFaceForEditing();
         Frame* getNearestEditedFrame();
         Face* getNearestEditedFace();
-        void getRegionsForRendering(
+        void getMergedRegions(int frame_id, int face_id,
             google::protobuf::Map<unsigned int, Region>& region_map);
+        void getCurrMergedRegions(
+            google::protobuf::Map<unsigned int, Region>& region_map);
+        bool saveFile(const std::string& filename);
 
     public slots:
         void frameIndexChanged(int);
@@ -123,6 +130,11 @@ namespace fvs
         void previousKeyFrameButtonClicked();
         void nextKeyFrameButtonClicked();
         void currFaceIdChanged(const QString& text);
+        void newFile();
+        void open();
+        bool save();
+        bool saveAs();
+        void about();
         
     private:
         QLabel* m_main_widget;
@@ -152,6 +164,12 @@ namespace fvs
         int m_next_frame_ind;
         int m_curr_hierarchy_level;
         int m_max_hierarchy_level;
+
+        std::string m_curr_file;
+        std::string m_output_dir;
+        std::string m_video_file;
+        std::string m_seg_file;
+        std::string m_landmarks_file;
 
         // video
         std::unique_ptr<cv::VideoCapture> m_cap;

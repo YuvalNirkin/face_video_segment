@@ -68,9 +68,9 @@ using namespace boost::filesystem;
 
 namespace fvs
 {
-    Editor::Editor(const std::string& video_file, const std::string& seg_file,
-        const std::string& landmarks_file, const std::string& fvs_path,
-        const std::string& output_dir) :
+    Editor::Editor(const std::string& fvs_path, const std::string& output_dir,
+        const std::string& video_file, const std::string& seg_file, 
+        const std::string& landmarks_file) :
         m_loop(false),
         m_refresh(true),
         m_slider_pause(false),
@@ -85,46 +85,13 @@ namespace fvs
         m_main_face_id(0),
         m_hierarchy_pos(0),
         m_edit_index(-1),
-        m_curr_face_id(0)
+        m_curr_face_id(0),
+        m_curr_file(fvs_path),
+        m_output_dir(output_dir),
+        m_video_file(video_file),
+        m_seg_file(seg_file),
+        m_landmarks_file(landmarks_file)
     {
-        // Initialize video capture
-        m_cap.reset(new cv::VideoCapture());
-        if (!m_cap->open(video_file))
-            throw std::runtime_error("Failed to open video file!");
-
-        m_frame_width = (int)m_cap->get(cv::CAP_PROP_FRAME_WIDTH);
-        m_frame_height = (int)m_cap->get(cv::CAP_PROP_FRAME_HEIGHT);
-        m_fps = m_cap->get(cv::CAP_PROP_FPS);
-        m_total_frames = (size_t)m_cap->get(cv::CAP_PROP_FRAME_COUNT);
-        m_scaled_frame.reset(new cv::Mat(m_frame_height, m_frame_width, CV_8UC3));
-        m_render_frame.reset(new cv::Mat(m_frame_height, m_frame_width, CV_8UC3));
-
-        // Make Qt image.
-        m_render_image.reset(new QImage((const uint8_t*)m_render_frame->data,
-            m_scaled_frame->cols,
-            m_scaled_frame->rows,
-            m_scaled_frame->step[0],
-            QImage::Format_RGB888));
-
-        // Initialize sequence face landmarks
-        m_sfl = sfl::SequenceFaceLandmarks::create(landmarks_file);
-        if(m_sfl->size() < m_total_frames)
-            throw std::runtime_error(
-                "The number of landmark frames does not match the number of video frames!");
-        const std::list<std::unique_ptr<sfl::Frame>>& sfl_frames_list =  m_sfl->getSequence();
-        m_curr_face_id = m_main_face_id = sfl::getMainFaceID(sfl_frames_list);
-        m_sfl_frames.reserve(sfl_frames_list.size());
-        for (auto& frame : sfl_frames_list)
-            m_sfl_frames.push_back(frame.get());  
-
-        // Initialize segmentation reader
-        m_seg_reader.reset(new segmentation::SegmentationReader(seg_file));
-        if (!m_seg_reader->OpenFileAndReadHeaders())
-            throw std::runtime_error("Failed to read segmentation file!");
-        m_seg_desc.reset(new segmentation::SegmentationDesc);
-        m_seg_hierarchy.reset(new segmentation::SegmentationDesc);
-        m_seg_reader->ReadNextFrame(m_seg_hierarchy.get());
-
         // Initialize keyframer
         m_keyframer = std::make_unique<Keyframer>(10, 5);
 
@@ -133,10 +100,12 @@ namespace fvs
         m_edited_regions.reset(new Sequence());
         m_face_boundary.reset(new std::vector<std::vector<cv::Point>>());
         m_face_boundary->resize(1);
-        m_face_map.reset(new cv::Mat(m_frame_height, m_frame_width, CV_8U));
 
         if (fvs_path.empty())   // Initialize empty faces
         {
+            throw std::runtime_error(
+                "Path to face video segmentation (.fvs) must be provided!");
+            /*
             // For each frame in the sequence
             auto& sfl_it = m_sfl->getSequence().begin();
             for (unsigned int i = 0; i < m_total_frames; ++i)
@@ -147,7 +116,7 @@ namespace fvs
                 fvs_frame->set_width(m_frame_width);
                 fvs_frame->set_height(m_frame_height);
                 auto& faces = *fvs_frame->mutable_faces();
-                
+
                 // For each face in the sfl frame
                 for (auto& sfl_face : sfl_frame->faces)
                 {
@@ -158,12 +127,63 @@ namespace fvs
                 // Check for keyframes
                 m_keyframer->addFrame(*sfl_frame, *fvs_frame);
             }
+            */
         }
         else    // Read input regions from file
-        {    
+        {
             std::ifstream input(fvs_path, std::ifstream::binary);
             m_input_regions->ParseFromIstream(&input);
+
+            // Extract paths to the rest of the files
+            if (m_video_file.empty()) m_video_file = m_input_regions->video_path();
+            if (!is_regular_file(m_video_file))
+                throw std::runtime_error("Couldn't find video file!");
+            if (m_seg_file.empty()) m_seg_file = m_input_regions->seg_path();
+            if (!is_regular_file(m_seg_file))
+                throw std::runtime_error("Couldn't find segmentation file!");
+            if (m_landmarks_file.empty()) m_landmarks_file = m_input_regions->landmarks_path();
+            if (!is_regular_file(m_landmarks_file))
+                throw std::runtime_error("Couldn't find landmarks cache file!");
         }
+
+        // Initialize video capture
+        m_cap.reset(new cv::VideoCapture());
+        if (!m_cap->open(m_video_file))
+            throw std::runtime_error("Failed to open video file!");
+
+        m_frame_width = (int)m_cap->get(cv::CAP_PROP_FRAME_WIDTH);
+        m_frame_height = (int)m_cap->get(cv::CAP_PROP_FRAME_HEIGHT);
+        m_fps = m_cap->get(cv::CAP_PROP_FPS);
+        m_total_frames = (size_t)m_cap->get(cv::CAP_PROP_FRAME_COUNT);
+        m_scaled_frame.reset(new cv::Mat(m_frame_height, m_frame_width, CV_8UC3));
+        m_render_frame.reset(new cv::Mat(m_frame_height, m_frame_width, CV_8UC3));
+        m_face_map.reset(new cv::Mat(m_frame_height, m_frame_width, CV_8U));
+
+        // Make Qt image.
+        m_render_image.reset(new QImage((const uint8_t*)m_render_frame->data,
+            m_scaled_frame->cols,
+            m_scaled_frame->rows,
+            m_scaled_frame->step[0],
+            QImage::Format_RGB888));
+
+        // Initialize sequence face landmarks
+        m_sfl = sfl::SequenceFaceLandmarks::create(m_landmarks_file);
+        if(m_sfl->size() < m_total_frames)
+            throw std::runtime_error(
+                "The number of landmark frames does not match the number of video frames!");
+        const std::list<std::unique_ptr<sfl::Frame>>& sfl_frames_list =  m_sfl->getSequence();
+        m_curr_face_id = m_main_face_id = sfl::getMainFaceID(sfl_frames_list);
+        m_sfl_frames.reserve(sfl_frames_list.size());
+        for (auto& frame : sfl_frames_list)
+            m_sfl_frames.push_back(frame.get());  
+
+        // Initialize segmentation reader
+        m_seg_reader.reset(new segmentation::SegmentationReader(m_seg_file));
+        if (!m_seg_reader->OpenFileAndReadHeaders())
+            throw std::runtime_error("Failed to read segmentation file!");
+        m_seg_desc.reset(new segmentation::SegmentationDesc);
+        m_seg_hierarchy.reset(new segmentation::SegmentationDesc);
+        m_seg_reader->ReadNextFrame(m_seg_hierarchy.get());
 
         // Get all face ids
         for (const Frame& fvs_frame : m_input_regions->frames())
@@ -171,6 +191,9 @@ namespace fvs
             for (auto& fvs_face : fvs_frame.faces())
                 m_face_ids.insert((int)fvs_face.second.id());
         }
+
+        // Create Menu
+        createMenu();
         
         // Create main widget
         m_main_widget = new QLabel(this);
@@ -289,19 +312,28 @@ namespace fvs
         //m_main_widget->resize(m_frame_width + border, m_frame_height + 4 * border);
         //resize(m_frame_width + border, m_frame_height + 4 * border);
         //m_display_widget->resize(m_frame_width, m_frame_height);
+        int verticalSpacing = centralLayout->verticalSpacing();
 
         QSize frame_slider_size = m_frame_slider->minimumSizeHint();
         QSize hierarchy_slider_size = m_frame_slider->minimumSizeHint();
         QSize window_size(m_frame_width + border, m_frame_height + 2*border +
             frame_slider_size.height() + hierarchy_slider_size.height() + m_play_button->height());
-        m_display_widget->resize(m_frame_width, m_frame_height);
+        //m_display_widget->resize(m_frame_width, m_frame_height);
+        m_display_widget->setFixedSize(m_frame_width, m_frame_height);
         m_display_widget->setSizePolicy(QSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed));
         m_curr_frame_label->setFixedWidth((border * 3) / 2);
         m_max_frame_label->setFixedWidth((border * 3) / 2);
         m_curr_hierarchy_label->setFixedWidth((border * 3) / 2);
         m_max_hierarchy_label->setFixedWidth((border * 3) / 2);
-        m_main_widget->resize(window_size);
-        resize(window_size);
+
+        //m_main_widget->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
+        //setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
+        QSize main_widget_size = m_main_widget->size();
+        //m_main_widget->resize(window_size);
+        m_main_widget->setMinimumSize(window_size);
+        m_main_widget->adjustSize();//
+        //resize(window_size);
+        //adjustSize();//
 
     }
 
@@ -472,7 +504,7 @@ namespace fvs
         
         // Get regions for rendering
         google::protobuf::Map<google::protobuf::uint32, fvs::Region> region_map;
-        getRegionsForRendering(region_map);
+        getCurrMergedRegions(region_map);
 
         // Calculate segmentation
         cv::Mat seg;
@@ -617,6 +649,10 @@ namespace fvs
             }
         }
 
+        /// Debug ///
+        face.PrintDebugString();
+        /////////////
+
         m_refresh = true;
         updateLater();
     }
@@ -714,9 +750,78 @@ namespace fvs
         return edit_face;
     }
 
-    void Editor::getRegionsForRendering(
+    void Editor::getMergedRegions(int frame_id, int face_id,
         google::protobuf::Map<unsigned int, Region>& region_map)
     {
+        auto& input_face_map = m_input_regions->frames(frame_id).faces();
+        auto& input_face = input_face_map.find(face_id);
+        if (input_face != input_face_map.end())
+            region_map = input_face->second.regions();
+
+        Frame* edit_frame = getNearestEditedFrame();
+        if (edit_frame == nullptr) return;
+        auto& edit_face_map = *edit_frame->mutable_faces();
+        auto& edit_face = edit_face_map.find(face_id);
+        if (edit_face == edit_face_map.end()) return;
+        auto& edit_region_map = edit_face->second.regions();
+
+        if (edit_frame->id() == frame_id)
+        {
+            // Overide edited regions
+            for (auto& edit_region : edit_region_map)
+                region_map[edit_region.second.id()] = edit_region.second;
+                //region_map[edit_region.second.id()].CopyFrom(edit_region.second);
+        }
+        else
+        {
+            // Only inherit totally full or empty edit regions
+            // For each region
+            for (const auto& r : m_seg_desc->region())
+            {
+                if (r.vectorization().polygon().empty()) continue;
+                auto& edit_region = edit_region_map.find((unsigned int)r.id());
+                if (edit_region == edit_region_map.end()) continue;
+                if (edit_region->second.polygons_size() == 0) continue;
+
+                // Check if to inherit
+                PolygonType type = edit_region->second.polygons(0);
+                bool inherit = true;
+                for (int i = 1; i < edit_region->second.polygons_size(); ++i)
+                {
+                    if (edit_region->second.polygons(i) != type)
+                    {
+                        inherit = false;
+                        break;
+                    }
+                }
+                if (!inherit) continue;
+
+                Region& region = region_map[(unsigned int)r.id()];
+                if (region.polygons_size() > 0) // Already initialized
+                {
+                    for (int i = 0; i < region.polygons_size(); ++i)
+                        region.set_polygons(i, type);
+                }
+                else    // Require initialization
+                {
+                    // For each polygon
+                    int poly_ind = 0;
+                    for (const auto& poly : r.vectorization().polygon())
+                    {
+                        if (poly.hole()) continue;
+                        if (poly.coord_idx_size() == 0) continue;
+                        region.add_polygons(type);
+                    }
+                }
+            }
+        }
+    }
+
+    void Editor::getCurrMergedRegions(
+        google::protobuf::Map<unsigned int, Region>& region_map)
+    {
+        getMergedRegions(m_curr_frame_ind, m_curr_face_id, region_map);
+        /*
         auto& input_face_map = m_input_regions->frames(m_curr_frame_ind).faces();
         auto& input_face = input_face_map.find(m_curr_face_id);
         if (input_face != input_face_map.end())
@@ -728,10 +833,6 @@ namespace fvs
         auto& edit_face = edit_face_map.find(m_curr_face_id);
         if (edit_face == edit_face_map.end()) return;
         auto& edit_region_map = edit_face->second.regions();
-
-        //Face* edit_face = getNearestEditedFace();
-        //if (edit_face == nullptr) return;
-        //auto& edit_region_map = edit_face->regions();
 
         if (edit_frame->id() == m_curr_frame_ind)
         {
@@ -782,6 +883,40 @@ namespace fvs
                 }
             }
         }
+        */
+    }
+
+    bool Editor::saveFile(const std::string& filename)
+    {
+        Sequence sequence(*m_input_regions);
+
+        // For each frame
+        for (Frame& frame : *sequence.mutable_frames())
+        {
+            // For each face
+            for (int face_id : m_face_ids)
+            {
+                google::protobuf::Map<unsigned int, Region> region_map;
+                getMergedRegions(frame.id(), face_id, region_map);
+                if (region_map.empty()) continue;
+
+                auto& face_map = *frame.mutable_faces();
+                *face_map[face_id].mutable_regions() = region_map;
+
+                /// Debug ///
+                if (face_map[face_id].keyframe())
+                {
+                    face_map[face_id].PrintDebugString();
+                }
+                /////////////
+            }
+        }
+
+        // TODO: Add new keyframes
+
+        std::ofstream output(filename, std::fstream::trunc | std::fstream::binary);
+        sequence.SerializeToOstream(&output);
+        return true;
     }
 
     void Editor::frameIndexChanged(int n)

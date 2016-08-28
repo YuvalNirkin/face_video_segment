@@ -878,6 +878,9 @@ namespace fvs
     {
         face_regions_.reset(new FaceRegions());
         m_fvs_sequence.reset(new Sequence());
+        m_fvs_sequence->set_video_path(options.video_path);
+        m_fvs_sequence->set_seg_path(options.seg_path);
+        m_fvs_sequence->set_landmarks_path(options.landmarks_path);
     }
 
     FaceRegionsUnit::~FaceRegionsUnit() {

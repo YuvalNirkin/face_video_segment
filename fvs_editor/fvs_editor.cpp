@@ -53,7 +53,7 @@ using namespace segmentation;
 int main(int argc, char* argv[])
 {
 	// Parse command line arguments
-	string inputPath, outputDir, segPath, landmarksPath, fvsPath;
+	string fvsPath, outputDir, segPath, landmarksPath, videoPath;
 	int device;
 	unsigned int width, height, verbose;
 	double fps, frame_scale;
@@ -62,13 +62,11 @@ int main(int argc, char* argv[])
 		options_description desc("Allowed options");
 		desc.add_options()
 			("help", "display the help message")
-			("input,i", value<string>(&inputPath), "path to video file")
+			("input,i", value<string>(&fvsPath), "path to face video segmentation (.fvs)")
 			("output,o", value<string>(&outputDir), "output directory")
 			("segmentation,s", value<string>(&segPath), "input segmentation protobuffer (.pb)")
             ("landmarks,l", value<string>(&landmarksPath), "path to landmarks cache (.pb)")
-            ("face_segmentation,f", value<string>(&fvsPath)->default_value(""), 
-                "path to face video segmentation (.fvs)")
-			("verbose,v", value<unsigned int>(&verbose)->default_value(0), "output debug information")
+			("video,v", value<string>(&videoPath)->default_value(""), "path to video file")
 			;
 		variables_map vm;
 		store(command_line_parser(argc, argv).options(desc).
@@ -79,9 +77,10 @@ int main(int argc, char* argv[])
 			exit(0);
 		}
 		notify(vm);
-		if (!is_regular_file(inputPath)) throw error("input must be a path to a file!");
+		if (!is_regular_file(fvsPath)) throw error("input must be a path to a file!");
 		if (vm.count("output") && !is_directory(outputDir))
 			throw error("output must be a path to a directory!");
+        /*
 		if (!is_regular_file(segPath)) throw error("segmentation must be a path to a file!");
         if (!is_regular_file(landmarksPath))
         {
@@ -91,6 +90,7 @@ int main(int argc, char* argv[])
             if (!is_regular_file(landmarksPath))
                 throw error("Couldn't find landmarks model or cache file!");
         }
+        */
 	}
 	catch (const error& e) {
 		cout << "Error while parsing command-line arguments: " << e.what() << endl;
@@ -100,8 +100,10 @@ int main(int argc, char* argv[])
 
 	//try
 	{
+        Q_INIT_RESOURCE(fvs_editor);
+
         QApplication app(argc, argv);
-        fvs::Editor editor(inputPath, segPath, landmarksPath, fvsPath, outputDir);
+        fvs::Editor editor(fvsPath, outputDir, videoPath, segPath, landmarksPath);
         editor.show();
         return app.exec();
         /*

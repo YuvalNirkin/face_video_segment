@@ -114,6 +114,9 @@ int main(int argc, char* argv[])
 
         // Face Regions Unit
         FaceRegionsOptions face_regions_options;
+        face_regions_options.video_path = inputPath;
+        face_regions_options.seg_path = segPath;
+        face_regions_options.landmarks_path = landmarksPath;
         FaceRegionsUnit face_regions_unit(face_regions_options);
         face_regions_unit.AttachTo(&landmarks_unit);
 

@@ -105,7 +105,7 @@ int main(int argc, char* argv[])
 		exit(1);
 	}
 
-	try
+	//try
 	{
         // Video Reader Unit
         VideoReaderUnit reader(VideoReaderOptions(), inputPath);
@@ -152,11 +152,11 @@ int main(int argc, char* argv[])
         if (!reader.Run())
             throw std::runtime_error("Could not process video file.");
 	}
-	catch (std::exception& e)
+	/*catch (std::exception& e)
 	{
 		cerr << e.what() << endl;
 		return 1;
-	}
+	}*/
 
 	return 0;
 }

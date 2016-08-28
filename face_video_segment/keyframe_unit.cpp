@@ -259,6 +259,15 @@ namespace fvs
                 if (options_.debug)
                     cv::imwrite(str(boost::format("%s\\%s_debug_%04d_face_%04d.jpg") %
                         output_dir_ % src_name_ % frame_number_ % fvs_face.second.id()), seg_debug_cropped);
+
+                /// Debug ///
+                if (options_.debug)
+                {
+                    std::ofstream output(str(boost::format("%s\\%s_debug_%04d_face_%04d.txt") %
+                        output_dir_ % src_name_ % frame_number_ % fvs_face.second.id()));
+                    output <<  fvs_face.second.DebugString();
+                }
+                /////////////
             }
         }
 
