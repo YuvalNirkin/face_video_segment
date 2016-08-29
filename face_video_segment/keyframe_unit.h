@@ -78,6 +78,8 @@ namespace fvs {
 		std::string segment_stream_name = "SegmentationStream";
 		std::string landmarks_stream_name = "LandmarksStream";
         std::string face_regions_stream_name = "FaceRegionsStream";
+        unsigned int max_scale = 500;
+        bool upscale = false;
         bool debug = false;
 	};
 

@@ -238,9 +238,9 @@ namespace fvs
                 // Limit resolution
                 cv::MatSize size = frame_cropped.size;
                 int max_index = std::distance(size.p, std::max_element(size.p, size.p + 2));
-                if (size[max_index] > 500)
+                if (options_.upscale || size[max_index] > (int)options_.max_scale)
                 {
-                    float scale = 500.0f / (float)size[max_index];
+                    float scale = (float)options_.max_scale / (float)size[max_index];
                     int w = (int)std::round(frame_cropped.cols * scale);
                     int h = (int)std::round(frame_cropped.rows * scale);
                     cv::resize(frame_cropped, frame_cropped, cv::Size(w, h),

@@ -38,6 +38,7 @@
 
 // boost
 #include <boost/filesystem.hpp>
+#include <boost/format.hpp> // debug
 
 // segmentation
 #include <segment_util/segmentation_io.h>
@@ -70,13 +71,14 @@ namespace fvs
 {
     Editor::Editor(const std::string& fvs_path, const std::string& output_dir,
         const std::string& video_file, const std::string& seg_file, 
-        const std::string& landmarks_file) :
+        const std::string& landmarks_file, bool debug) :
         m_loop(false),
         m_refresh(true),
         m_slider_pause(false),
         m_update_pending(false),
         m_update_frame(true),
         m_update_face(false),
+        m_debug(debug),
         m_curr_frame_ind(0),
         m_next_frame_ind(-1),
         m_frame_width(0), m_frame_height(0),
@@ -703,6 +705,9 @@ namespace fvs
         // Inherit regions from nearest edit frame
         if (nearest_edit_frame != nullptr)
         {
+            // Initialize
+
+            //
             auto& nearest_face_map = *nearest_edit_frame->mutable_faces();
             Face& nearest_edit_face = nearest_face_map[(unsigned int)m_curr_face_id];
             for (auto& r : *nearest_edit_face.mutable_regions())
@@ -904,10 +909,17 @@ namespace fvs
                 *face_map[face_id].mutable_regions() = region_map;
 
                 /// Debug ///
+                if (m_debug)
+                {
+                    std::ofstream output((path(filename).stem() += ".txt").string());
+                    output << m_edited_regions->DebugString();
+                }
+                /*
                 if (face_map[face_id].keyframe())
                 {
                     face_map[face_id].PrintDebugString();
                 }
+                */
                 /////////////
             }
         }

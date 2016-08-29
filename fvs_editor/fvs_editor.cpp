@@ -54,19 +54,18 @@ int main(int argc, char* argv[])
 {
 	// Parse command line arguments
 	string fvsPath, outputDir, segPath, landmarksPath, videoPath;
-	int device;
-	unsigned int width, height, verbose;
-	double fps, frame_scale;
-	bool preview;
+    unsigned int debug;
 	try {
 		options_description desc("Allowed options");
 		desc.add_options()
 			("help", "display the help message")
-			("input,i", value<string>(&fvsPath), "path to face video segmentation (.fvs)")
+			("input,i", value<string>(&fvsPath)->required(), 
+                "path to face video segmentation (.fvs)")
 			("output,o", value<string>(&outputDir), "output directory")
 			("segmentation,s", value<string>(&segPath), "input segmentation protobuffer (.pb)")
             ("landmarks,l", value<string>(&landmarksPath), "path to landmarks cache (.pb)")
-			("video,v", value<string>(&videoPath)->default_value(""), "path to video file")
+			("video,v", value<string>(&videoPath), "path to video file")
+            ("debug,d", value<unsigned int>(&debug)->default_value(0), "output debug information")
 			;
 		variables_map vm;
 		store(command_line_parser(argc, argv).options(desc).
@@ -103,43 +102,9 @@ int main(int argc, char* argv[])
         Q_INIT_RESOURCE(fvs_editor);
 
         QApplication app(argc, argv);
-        fvs::Editor editor(fvsPath, outputDir, videoPath, segPath, landmarksPath);
+        fvs::Editor editor(fvsPath, outputDir, videoPath, segPath, landmarksPath, debug > 0);
         editor.show();
         return app.exec();
-        /*
-        // Video Reader Unit
-        VideoReaderUnit reader(VideoReaderOptions(), inputPath);
-
-        // Segmentation Reader Unit
-        SegmentationReaderUnitOptions segOptions;
-        segOptions.filename = segPath;
-        SegmentationReaderUnit seg_reader(segOptions);
-        seg_reader.AttachTo(&reader);
-
-        // Video display
-        SegmentationDisplayOptions seg_display_options;
-        seg_display_options.hierarchy_level = 0.1f;
-        std::unique_ptr<SegmentationDisplayUnit> display;
-        display.reset(new SegmentationDisplayUnit(seg_display_options));
-        display->AttachTo(&reader);
-
-        //std::unique_ptr<VideoDisplayQtUnit> display;
-        //display.reset(new VideoDisplayQtUnit(VideoDisplayQtOptions()));
-        //display->AttachTo(&reader);
-
-        // Prepare processing
-        if (!reader.PrepareProcessing())
-            throw std::runtime_error("Video framework setup failed.");
-
-        // Run with rate limitation.
-        RatePolicy rate_policy;
-        // Speed up playback for fun :)
-        rate_policy.max_rate = 45;
-
-        // This call will block and return when the whole has been displayed.
-        if (!reader.RunRateLimited(rate_policy))
-            throw std::runtime_error("Could not process video file.");
-            */
 	}
     /*
 	catch (std::exception& e)

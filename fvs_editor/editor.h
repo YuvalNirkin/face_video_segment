@@ -93,7 +93,7 @@ namespace fvs
 	public:
         explicit Editor(const std::string& fvs_path, const std::string& output_dir = "",
             const std::string& video_file = "", const std::string& seg_file = "",
-            const std::string& landmarks_file = "");
+            const std::string& landmarks_file = "", bool debug = false);
         ~Editor();
 
     private:
@@ -159,6 +159,7 @@ namespace fvs
         bool m_update_pending;
         bool m_update_frame;
         bool m_update_face;
+        bool m_debug;
 
         int m_curr_frame_ind;
         int m_next_frame_ind;

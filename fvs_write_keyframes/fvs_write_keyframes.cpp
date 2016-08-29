@@ -52,23 +52,24 @@ using namespace fvs;
 int main(int argc, char* argv[])
 {
 	// Parse command line arguments
-	string inputPath, outputDir, segPath, landmarksPath, fvsPath;
-	int device;
-	unsigned int width, height, verbose;
-	double fps, frame_scale;
-	bool preview;
+	string fvsPath, outputDir, segPath, landmarksPath, videoPath;
+	unsigned int max_scale, debug;
+    bool upscale;
 	try {
 		options_description desc("Allowed options");
-		desc.add_options()
-			("help", "display the help message")
-			("input,i", value<string>(&inputPath), "path to video file")
-			("output,o", value<string>(&outputDir), "output directory")
-			("segmentation,s", value<string>(&segPath), "input segmentation protobuffer (.pb)")
-			("landmarks,l", value<string>(&landmarksPath), "path to landmarks model or cache (.pb)")
-            ("face_segmentation,f", value<string>(&fvsPath)->default_value(""),
-                "path to face video segmentation (.fvs)")
-			("verbose,v", value<unsigned int>(&verbose)->default_value(0), "output debug information")
-			;
+        desc.add_options()
+            ("help", "display the help message")
+            ("input,i", value<string>(&fvsPath)->required(), "path to face video segmentation (.fvs)")
+            ("output,o", value<string>(&outputDir)->required(), "output directory")
+            ("segmentation,s", value<string>(&segPath), "input segmentation protobuffer (.pb)")
+            ("landmarks,l", value<string>(&landmarksPath), "path to landmarks cache (.pb)")
+            ("video,v", value<string>(&videoPath), "path to video file")
+            ("max_scale,m", value<unsigned int>(&max_scale)->default_value(500),
+                "max keyframe scale [pixels]")
+            ("upscale,u", value<bool>(&upscale)->default_value(false)->implicit_value(true),
+                "upscale to max scale")
+            ("debug,d", value<unsigned int>(&debug)->default_value(0), "output debug information")
+            ;
 		variables_map vm;
 		store(command_line_parser(argc, argv).options(desc).
 			positional(positional_options_description().add("input", -1)).run(), vm);
@@ -78,25 +79,35 @@ int main(int argc, char* argv[])
 			exit(0);
 		}
 		notify(vm);
-		if (!is_regular_file(inputPath)) throw error("input must be a path to a file!");
-		if (vm.count("output") && !is_directory(outputDir))
+
+        // Read fvs file to extract the stored paths
+        fvs::Sequence sequence;
+        std::ifstream input(fvsPath, std::ifstream::binary);
+        sequence.ParseFromIstream(&input);
+
+
+        path inputPath = path(fvsPath);
+		if (!is_regular_file(fvsPath)) 
+            throw error("input must be a path to a face video segmentation file!");
+		if (outputDir.empty() || !is_directory(outputDir))
 			throw error("output must be a path to a directory!");
-		if (!is_regular_file(segPath)) throw error("segmentation must be a path to a file!");
-		if (!is_regular_file(landmarksPath))
-		{
-			path input = path(inputPath);
-			landmarksPath =
-				(input.parent_path() / (input.stem() += "_landmarks.pb")).string();
-			if (!is_regular_file(landmarksPath))
-				throw error("Couldn't find landmarks model or cache file!");
-		}
-        if (!is_regular_file(fvsPath))
+        if (videoPath.empty()) videoPath = sequence.video_path();
+        if (!is_regular_file(videoPath))
+            throw error("Couldn't find video file!");
+        if (segPath.empty()) segPath = sequence.seg_path();
+        if (!is_regular_file(segPath))
         {
-            path input = path(inputPath);
-            fvsPath =
-                (input.parent_path() / (input.stem() += ".fvs")).string();
-            if (!is_regular_file(fvsPath))
-                throw error("Couldn't find face video segmentation file!");
+            segPath = (inputPath.parent_path() / (inputPath.filename() += ".pb")).string();
+            if (!is_regular_file(segPath))
+                throw error("Couldn't find segmentation file!");
+        }
+        if (landmarksPath.empty()) landmarksPath = sequence.landmarks_path();
+        if (!is_regular_file(landmarksPath))
+        {
+            landmarksPath =
+                (inputPath.parent_path() / (inputPath.stem() += "_landmarks.pb")).string();
+            if (!is_regular_file(landmarksPath))
+                throw error("Couldn't find landmarks cache file!");
         }
 	}
 	catch (const error& e) {
@@ -108,7 +119,7 @@ int main(int argc, char* argv[])
 	//try
 	{
         // Video Reader Unit
-        VideoReaderUnit reader(VideoReaderOptions(), inputPath);
+        VideoReaderUnit reader(VideoReaderOptions(), videoPath);
 
         // Segmentation Reader Unit
         SegmentationReaderUnitOptions segOptions;
@@ -139,9 +150,11 @@ int main(int argc, char* argv[])
 
         // Keyframe Writer Unit
         KeyframeWriterOptions keyframe_writer_options;
-        keyframe_writer_options.debug = verbose > 0;
+        keyframe_writer_options.max_scale = max_scale;
+        keyframe_writer_options.upscale = upscale;
+        keyframe_writer_options.debug = debug > 0;
         KeyframeWriterUnit keyframe_writer_unit(keyframe_writer_options, outputDir,
-            path(inputPath).stem().string());
+            path(videoPath).stem().string());
         keyframe_writer_unit.AttachTo(&face_regions_unit);
 
         // Prepare processing
