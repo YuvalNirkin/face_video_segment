@@ -11,11 +11,12 @@ function fvs_write_keyframes(varargin)
 
 %% Parse input arguments
 p = inputParser;
-addRequired(p, 'videoFile', @ischar);
+addRequired(p, 'fvsFile', @ischar);
 addRequired(p, 'outDir', @ischar);
+addRequired(p, 'videoFile', @ischar);
 addRequired(p, 'landmarksFile', @ischar);
 addRequired(p, 'segmentationFile', @ischar);
-addRequired(p, 'fvsFile', @ischar);
+
 addParameter(p, 'verbose', 0, @isscalar);
 parse(p,varargin{:});
 

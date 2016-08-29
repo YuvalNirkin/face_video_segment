@@ -568,7 +568,7 @@ namespace fvs
             edit_region.set_id((unsigned int)id);
             if (edit_region.polygons_size() == 0)    // Not initialized
             {
-                // Copy region from input regions
+                // Copy regions from input regions
                 const Frame& input_frame = m_input_regions->frames(m_curr_frame_ind);
                 auto& input_face_map = input_frame.faces();
                 auto& input_face = input_face_map.find(m_curr_face_id);
@@ -659,8 +659,131 @@ namespace fvs
         updateLater();
     }
 
-    Face & Editor::getFaceForEditing()
+    Face& Editor::getFaceForEditing()
     {
+        Frame *edit_frame = nullptr, *nearest_edit_frame = nullptr;
+        Face *edit_face = nullptr, *nearest_edit_face = nullptr;
+
+        // Find edit frame (assume sorted)
+        for (Frame& frame : *m_edited_regions->mutable_frames())
+        {
+            if (frame.id() == m_curr_frame_ind)
+            {
+                edit_frame = &frame;
+                break;
+            }
+            else if (frame.id() < m_curr_frame_ind)
+                nearest_edit_frame = &frame;
+        }
+
+        // Create edit frame if it doesn't exist for current frame index
+        if (edit_frame == nullptr)
+        {
+            edit_frame = m_edited_regions->add_frames();
+            edit_frame->set_id(m_curr_frame_ind);
+            edit_frame->set_width(m_frame_width);
+            edit_frame->set_height(m_frame_height);
+
+            // Sort frames
+            std::sort(m_edited_regions->mutable_frames()->begin(),
+                m_edited_regions->mutable_frames()->end(),
+                [](const Frame& f1, const Frame& f2) {
+                return f1.id() < f1.id();
+            });
+        }
+        else
+        {
+            // Find edit face
+            auto& edit_face_map = *edit_frame->mutable_faces();
+            auto& edit_face_it = edit_face_map.find(m_curr_face_id);
+            if (edit_face_it != edit_face_map.end())
+                edit_face = &edit_face_it->second;
+        }
+
+        // Find nearest edit face
+        if (nearest_edit_frame != nullptr)
+        {
+            auto& nearest_edit_face_map = *nearest_edit_frame->mutable_faces();
+            auto& nearest_edit_face_it = nearest_edit_face_map.find(m_curr_face_id);
+            if (nearest_edit_face_it != nearest_edit_face_map.end())
+                nearest_edit_face = &nearest_edit_face_it->second;
+        }
+
+        // Check if edit face already exists
+        if (edit_face == nullptr)
+        {
+            // Create edit face
+            auto& edit_face_map = *edit_frame->mutable_faces();
+            edit_face = &edit_face_map[(unsigned int)m_curr_face_id];
+            edit_face->set_id((unsigned int)m_curr_face_id);
+
+            // Inherit regions from nearest edit frame
+            if (nearest_edit_face != nullptr)
+            {
+                auto& edit_region_map = *edit_face->mutable_regions();
+                auto& nearest_edit_region_map = *nearest_edit_face->mutable_regions();
+                //const Frame& input_frame = m_input_regions->frames(m_curr_frame_ind);
+                //auto& input_face_map = input_frame.faces();
+                //auto& input_face = input_face_map.find(m_curr_face_id);
+
+                // For each region
+                for (auto& r : m_seg_desc->region())
+                {
+                    auto& nearest_edit_region = nearest_edit_region_map.find((unsigned int)r.id());
+                    if (nearest_edit_region == nearest_edit_region_map.end()) continue;
+
+                    // Count each polygon
+                    int poly_count = 0;
+                    for (auto& poly : r.vectorization().polygon())
+                    {
+                        if (poly.hole()) continue;
+                        if (poly.coord_idx_size() == 0) continue;
+                        ++poly_count;
+                    }
+
+                    if (poly_count > 0)
+                    {
+                        if (nearest_edit_region->second.polygons_size() == poly_count)
+                        {
+                            edit_region_map[nearest_edit_region->first] = 
+                                nearest_edit_region->second;
+                        }
+                        else    // Different number of polygons
+                        {
+                            // Check if to inherit
+                            PolygonType type = nearest_edit_region->second.polygons(0);
+                            bool inherit = true;
+                            for (int i = 1; i < nearest_edit_region->second.polygons_size(); ++i)
+                            {
+                                if (nearest_edit_region->second.polygons(i) != type)
+                                {
+                                    inherit = false;
+                                    break;
+                                }
+                            }
+                            if (!inherit) continue;
+
+                            // Inherit
+                            Region& edit_region = edit_region_map[nearest_edit_region->first];
+
+                            // For each polygon
+                            for (const auto& poly : r.vectorization().polygon())
+                            {
+                                if (poly.hole()) continue;
+                                if (poly.coord_idx_size() == 0) continue;
+                                edit_region.add_polygons(type);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        return *edit_face;
+
+        /////
+        /////
+        /*
         // Find edit frame (assume sorted)
         Frame *edit_frame = nullptr, *nearest_edit_frame = nullptr;
         int frame_ind = 0;
@@ -716,9 +839,10 @@ namespace fvs
 
         // Return face for editing
         return edit_face;
+        */
     }
 
-    Frame * Editor::getNearestEditedFrame()
+    Frame * Editor::getNearestEditedFrame(int frame_id)
     {
         if (m_edited_regions->mutable_frames()->empty()) return nullptr;
 
@@ -726,17 +850,17 @@ namespace fvs
         Frame* edit_frame = nullptr;
         for (Frame& frame : *m_edited_regions->mutable_frames())
         {
-            if (frame.id() <= m_curr_frame_ind)
+            if (frame.id() <= frame_id)
             {
                 edit_frame = &frame;
-                if (frame.id() == m_curr_frame_ind) break;
+                if (frame.id() == frame_id) break;
             }
         }
 
         return edit_frame;
     }
 
-    Face* Editor::getNearestEditedFace()
+    Face* Editor::getNearestEditedFace(int frame_id)
     {
         if (m_edited_regions->mutable_frames()->empty()) return nullptr;
         
@@ -744,11 +868,11 @@ namespace fvs
         Face* edit_face = nullptr;
         for (Frame& frame : *m_edited_regions->mutable_frames())
         {
-            if (frame.id() <= m_curr_frame_ind)
+            if (frame.id() <= frame_id)
             {
                 auto& face_map = *frame.mutable_faces();
                 edit_face = &face_map[(unsigned int)m_curr_face_id];
-                if(frame.id() == m_curr_frame_ind) break;
+                if(frame.id() == frame_id) break;
             }
         }
 
@@ -763,7 +887,7 @@ namespace fvs
         if (input_face != input_face_map.end())
             region_map = input_face->second.regions();
 
-        Frame* edit_frame = getNearestEditedFrame();
+        Frame* edit_frame = getNearestEditedFrame(frame_id);
         if (edit_frame == nullptr) return;
         auto& edit_face_map = *edit_frame->mutable_faces();
         auto& edit_face = edit_face_map.find(face_id);
@@ -906,25 +1030,27 @@ namespace fvs
                 if (region_map.empty()) continue;
 
                 auto& face_map = *frame.mutable_faces();
-                *face_map[face_id].mutable_regions() = region_map;
-
-                /// Debug ///
-                if (m_debug)
-                {
-                    std::ofstream output((path(filename).stem() += ".txt").string());
-                    output << m_edited_regions->DebugString();
-                }
-                /*
-                if (face_map[face_id].keyframe())
-                {
-                    face_map[face_id].PrintDebugString();
-                }
-                */
-                /////////////
+                *face_map[face_id].mutable_regions() = region_map; 
             }
         }
 
         // TODO: Add new keyframes
+
+        /// Debug ///
+        if (m_debug)
+        {
+            std::string outPath = (boost::filesystem::path(m_output_dir) /
+                (path(filename).stem() += ".txt")).string();
+            std::ofstream output(outPath);
+            output << m_edited_regions->DebugString();
+        }
+        /*
+        if (face_map[face_id].keyframe())
+        {
+        face_map[face_id].PrintDebugString();
+        }
+        */
+        /////////////
 
         std::ofstream output(filename, std::fstream::trunc | std::fstream::binary);
         sequence.SerializeToOstream(&output);

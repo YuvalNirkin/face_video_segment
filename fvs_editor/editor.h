@@ -113,8 +113,8 @@ namespace fvs
         void render(cv::Mat& frame);
         void regionSelected(QMouseEvent* event);
         Face& getFaceForEditing();
-        Frame* getNearestEditedFrame();
-        Face* getNearestEditedFace();
+        Frame* getNearestEditedFrame(int frame_id);
+        Face* getNearestEditedFace(int frame_id);
         void getMergedRegions(int frame_id, int face_id,
             google::protobuf::Map<unsigned int, Region>& region_map);
         void getCurrMergedRegions(
