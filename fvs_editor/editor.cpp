@@ -64,6 +64,7 @@
 #include <QStyle>
 #include <QComboBox>
 #include <QToolButton>
+#include <QStatusBar>
 
 using namespace boost::filesystem;
 
@@ -265,7 +266,7 @@ namespace fvs
 
         // Create buttons
         m_play_button = new QToolButton(this);
-        m_play_button->setIcon(style()->standardIcon(QStyle::SP_MediaPause));
+        m_play_button->setIcon(style()->standardIcon(QStyle::SP_MediaPlay));
         connect(m_play_button, SIGNAL(clicked()), this, SLOT(playButtonClicked()));
         m_previous_keyframe_button = new QToolButton(this);
         m_previous_keyframe_button->setIcon(style()->standardIcon(QStyle::SP_MediaSeekBackward));
@@ -395,7 +396,11 @@ namespace fvs
         {
             m_curr_frame_ind = (int)m_cap->get(cv::CAP_PROP_POS_FRAMES);
             m_frame_slider->setValue(m_curr_frame_ind);
-            if (m_curr_frame_ind >= m_total_frames) pause(true);
+            if (m_curr_frame_ind >= m_total_frames)
+            {
+                m_curr_frame_ind = (int)m_total_frames - 1;
+                pause(true);
+            }
             else if (m_cap->read(*m_scaled_frame))
             {
                 // Update segmentation
@@ -460,13 +465,14 @@ namespace fvs
     void Editor::pause(bool pause)
     {
         m_loop = !pause;
-        m_update_frame = m_refresh = m_loop;
+        m_update_frame = m_loop;
+        //m_update_frame = m_refresh = m_loop;
         if (m_loop)
         {
             updateLater();
-            m_play_button->setIcon(style()->standardIcon(QStyle::SP_MediaPlay));
+            m_play_button->setIcon(style()->standardIcon(QStyle::SP_MediaPause));
         }
-        else m_play_button->setIcon(style()->standardIcon(QStyle::SP_MediaPause));
+        else m_play_button->setIcon(style()->standardIcon(QStyle::SP_MediaPlay));
     }
 
     void Editor::render(cv::Mat& frame)
@@ -765,6 +771,7 @@ namespace fvs
 
                             // Inherit
                             Region& edit_region = edit_region_map[nearest_edit_region->first];
+                            edit_region.set_id(nearest_edit_region->first);
 
                             // For each polygon
                             for (const auto& poly : r.vectorization().polygon())
@@ -1017,6 +1024,7 @@ namespace fvs
 
     bool Editor::saveFile(const std::string& filename)
     {
+        statusBar()->showMessage(tr("Saving..."));
         Sequence sequence(*m_input_regions);
 
         // For each frame
@@ -1054,6 +1062,8 @@ namespace fvs
 
         std::ofstream output(filename, std::fstream::trunc | std::fstream::binary);
         sequence.SerializeToOstream(&output);
+
+        statusBar()->showMessage(tr("Saving... done!"));
         return true;
     }
 

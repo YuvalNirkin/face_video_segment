@@ -109,9 +109,8 @@ for i = indices
     else
         disp(['Writing keyframes to the directory "' vidName '".']);
         mkdir(vidOutDir);
-        fvs_write_keyframes(vidFile, vidOutDir, dstLandmarksPath, dstSegTreePath, dstFvsPath, 'verbose', p.Results.verbose);
-    end   
-    
+        fvs_write_keyframes(dstFvsPath, vidOutDir, vidFile, dstSegTreePath, dstLandmarksPath, 'debug', p.Results.verbose);
+    end      
 end
 
 function b = is_video(file)

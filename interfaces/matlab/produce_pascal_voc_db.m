@@ -41,6 +41,16 @@ elseif(max(indices) > length(dirNames) || min(indices) < 1)
     error(['indices must be from 1 to ' num2str(length(dirNames))]);
 end
 
+%% Read trainval file
+trainvalFile = fullfile(p.Results.inDir, 'trainval.csv');
+T = readtable(trainvalFile,'Delimiter',';','Format', '%s%s%s');
+names = table2cell(T(:,1));
+targets = table2cell(T(:,2));
+if(length(dirNames) ~= length(names))
+    error(['There is a mismatch between the trainval file '...
+        'and number of directories in "' p.Results.inDir '".']);
+end
+
 %% Initialize training and valuation set
 train = [];
 val = [];
@@ -49,6 +59,14 @@ val = [];
 cmap = labelColors();
 for i = indices   
     dirPath = fullfile(p.Results.inDir, dirNames{i});
+    if(~strcmp(dirNames{i}, names{i}))
+        error(['There is a mismatch between the trainval file '...
+        'and the directories!']);
+    end
+    if(any(strcmp(targets{i}, {'train','val'})))
+        disp(['Skipping "' dirNames{i} '"']);
+        continue;
+    end
     disp(['Processing "' dirNames{i} '"']);
     
     %% Parse current directory
