@@ -477,39 +477,6 @@ namespace fvs
 
     void Editor::render(cv::Mat& frame)
     {
-        /*
-        // Render segmentation at specified level.
-        segmentation::RenderRegionsRandomColor(m_curr_hierarchy_level,
-            true,
-            false,
-            *m_seg_desc,
-            &m_seg_hierarchy->hierarchy(),
-            &frame);
-            */
-        /*
-        // Render segmentation
-        auto& input_face_map = m_input_regions->frames(m_curr_frame_ind).faces();
-        auto& input_face = input_face_map.find(m_curr_face_id);
-        Face* edit_face = getNearestEditedFace();
-        google::protobuf::Map<google::protobuf::uint32, fvs::Region> region_map;
-        if (input_face != input_face_map.end())
-            region_map = input_face->second.regions();
-        else if(edit_face != nullptr)
-            region_map = edit_face->regions();
-
-        // Overide edited regions
-        if (edit_face != nullptr && input_face != input_face_map.end())
-        {
-            for (auto& edit_region : edit_face->regions())
-            {
-                region_map[edit_region.second.id()] = edit_region.second;
-                //auto& render_region = region_map.find(edit_region.second.id());
-                //if (render_region == region_map.end()) continue;
-                //render_region->second = edit_region.second;
-            }
-        }
-        */
-        
         // Get regions for rendering
         google::protobuf::Map<google::protobuf::uint32, fvs::Region> region_map;
         getCurrMergedRegions(region_map);
@@ -933,6 +900,7 @@ namespace fvs
                 if (!inherit) continue;
 
                 Region& region = region_map[(unsigned int)r.id()];
+                region.set_id((unsigned int)r.id());
                 if (region.polygons_size() > 0) // Already initialized
                 {
                     for (int i = 0; i < region.polygons_size(); ++i)
@@ -957,69 +925,6 @@ namespace fvs
         google::protobuf::Map<unsigned int, Region>& region_map)
     {
         getMergedRegions(m_curr_frame_ind, m_curr_face_id, region_map);
-        /*
-        auto& input_face_map = m_input_regions->frames(m_curr_frame_ind).faces();
-        auto& input_face = input_face_map.find(m_curr_face_id);
-        if (input_face != input_face_map.end())
-            region_map = input_face->second.regions();
-
-        Frame* edit_frame = getNearestEditedFrame();
-        if (edit_frame == nullptr) return;
-        auto& edit_face_map = *edit_frame->mutable_faces();
-        auto& edit_face = edit_face_map.find(m_curr_face_id);
-        if (edit_face == edit_face_map.end()) return;
-        auto& edit_region_map = edit_face->second.regions();
-
-        if (edit_frame->id() == m_curr_frame_ind)
-        {
-            // Overide edited regions
-            for (auto& edit_region : edit_region_map)
-                region_map[edit_region.second.id()] = edit_region.second;
-        }
-        else
-        {
-            // Only inherit totally full or empty edit regions
-            // For each region
-            for (const auto& r : m_seg_desc->region())
-            {
-                if (r.vectorization().polygon().empty()) continue;
-                auto& edit_region = edit_region_map.find((unsigned int)r.id());
-                if (edit_region == edit_region_map.end()) continue;
-                if (edit_region->second.polygons_size() == 0) continue;
-
-                // Check if to inherit
-                PolygonType type = edit_region->second.polygons(0);
-                bool inherit = true;
-                for (int i = 1; i < edit_region->second.polygons_size(); ++i)
-                {
-                    if (edit_region->second.polygons(i) != type)
-                    {
-                        inherit = false;
-                        break;
-                    }
-                }
-                if (!inherit) continue;
-
-                Region& region = region_map[(unsigned int)r.id()];
-                if (region.polygons_size() > 0) // Already initialized
-                {
-                    for (int i = 0; i < region.polygons_size(); ++i)
-                        region.set_polygons(i, type);
-                }
-                else    // Require initialization
-                {
-                    // For each polygon
-                    int poly_ind = 0;
-                    for (const auto& poly : r.vectorization().polygon())
-                    {
-                        if (poly.hole()) continue;
-                        if (poly.coord_idx_size() == 0) continue;
-                        region.add_polygons(type);
-                    }
-                }
-            }
-        }
-        */
     }
 
     bool Editor::saveFile(const std::string& filename)
@@ -1030,6 +935,10 @@ namespace fvs
         // For each frame
         for (Frame& frame : *sequence.mutable_frames())
         {
+            // Update segmentation
+            m_seg_reader->SeekToFrame(frame.id());
+            m_seg_reader->ReadNextFrame(m_seg_desc.get());
+
             // For each face
             for (int face_id : m_face_ids)
             {
@@ -1062,6 +971,10 @@ namespace fvs
 
         std::ofstream output(filename, std::fstream::trunc | std::fstream::binary);
         sequence.SerializeToOstream(&output);
+        
+        // Restore segmentation to current frame
+        m_seg_reader->SeekToFrame(m_curr_frame_ind);
+        m_seg_reader->ReadNextFrame(m_seg_desc.get());
 
         statusBar()->showMessage(tr("Saving... done!"));
         return true;
