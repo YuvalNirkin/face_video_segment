@@ -7,6 +7,8 @@ p = inputParser;
 addRequired(p, 'inDir', @ischar);
 addRequired(p, 'outDir', @ischar);
 addParameter(p, 'indices', [], @isvector);
+addParameter(p, 'max_scale', 0, @isscalar);
+addParameter(p, 'upscale', 0, @isscalar);
 parse(p,varargin{:});
 indices = p.Results.indices;
 
@@ -63,7 +65,7 @@ for i = indices
         error(['There is a mismatch between the trainval file '...
         'and the directories!']);
     end
-    if(any(strcmp(targets{i}, {'train','val'})))
+    if(~any(strcmp(targets{i}, {'train','val'})))
         disp(['Skipping "' dirNames{i} '"']);
         continue;
     end
@@ -71,27 +73,22 @@ for i = indices
     
     %% Parse current directory
     fileDescs = dir(fullfile(dirPath, '*frame*'));
-    frames = {fileDescs.name};
+    srcFrames = {fileDescs.name};
     fileDescs = dir(fullfile(dirPath, '*seg*'));
-    segmentations = {fileDescs.name};
+    srcSegmentations = {fileDescs.name};
     
     %% Copy files
-    dstNames = process_files(frames, dirPath, framesPath);
-    process_files(segmentations, dirPath, segmentationsPath);
+    dstNames = calc_dst_names(srcFrames);
+    process_files(srcFrames, dstNames, dirPath, framesPath, 'bicubic');
+    process_files(srcSegmentations, dstNames, dirPath,...
+        segmentationsPath, 'nearest');
     
     %% Add images to training and valuation sets
-    [train_ind, val_ind] = calc_set_indices(length(dstNames), 0.1, 2, 1);
-    train = [train; dstNames(train_ind)];
-    val = [val; dstNames(val_ind)];
-    %{
-    if(length(dstNames) > 2)
-        val_ind = floor((length(dstNames) + 1)/2);
-        train = [train; dstNames(1:val_ind-1); dstNames(val_ind+1:end)];
-        val = [val dstNames(val_ind)];
-    else
+    if(strcmp(targets{i}, 'train'))
         train = [train; dstNames];
+    else    % val
+        val = [val; dstNames];
     end
-    %}
 end
 
 %% Write training and valuation sets to files
@@ -118,15 +115,21 @@ end
 
 %% Helper functions
 
-    function dstNames = process_files(fileNames, inDir, outDir)
-        dstNames = cell(length(fileNames),1);
-        for j = 1:length(fileNames)
-            dstNames{j} = [dirNames{i} fileNames{j}(end-8:end-4)];
-            dstFile = [dirNames{i} fileNames{j}(end-8:end)];
-            srcPath = fullfile(inDir, fileNames{j});
+    function process_files(srcFiles, dstNames, inDir, outDir,...
+        inter_method)
+        for j = 1:length(srcFiles)
+            [~,~,ext] = fileparts(srcFiles{j});
+            dstFile = [dstNames{j} ext];
+            srcPath = fullfile(inDir, srcFiles{j});
             dstPath = fullfile(outDir, dstFile);
-            % copyfile(srcPath, dstPath);
             I = imread(srcPath);
+            if(p.Results.max_scale > 0 && ...
+                (max(size(I)) > p.Results.max_scale || ...
+                (max(size(I)) < p.Results.max_scale && p.Results.upscale)))
+                scale = p.Results.max_scale / max(size(I));
+                outputSize = round([size(I,1),size(I,2)]*scale);
+                I = imresize(I, outputSize, inter_method);
+            end
             imwrite(I,cmap,dstPath,'png');
         end
     end
@@ -137,6 +140,14 @@ end
              fprintf(fid, '%s\n', stringArray{j});
         end
         fclose(fid);
+    end
+end
+
+function dstNames = calc_dst_names(srcFiles)
+    dstNames = cell(length(srcFiles),1);
+    for i = 1:length(srcFiles)
+        C = strsplit(srcFiles{i}, {'_', '.'});
+        dstNames{i} = [C{1} '_' C{3} '_' C{5}];
     end
 end
 
@@ -154,21 +165,5 @@ function cmap = labelColors()
       cmap(i,1)=r; cmap(i,2)=g; cmap(i,3)=b;
     end
     cmap = cmap / 255;
-end
-
-function [train_ind, val_ind] = calc_set_indices(n, val_ratio,...
-    min_train_size, min_val_size)
-    if(n <= min_train_size)
-        train_ind = 1:n;
-        val_ind = [];
-    else
-        val_size = round(n*val_ratio);
-        if(val_size < min_val_size)
-            val_size = min(min_val_size, n);
-        end
-        step = round(n/(val_size + 1));
-        val_ind = step:step:min(val_size*step, n);
-        train_ind = setdiff(1:n, val_ind);
-    end
 end
 
