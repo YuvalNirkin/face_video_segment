@@ -210,11 +210,12 @@ namespace fvs
                 {
                     face_map = cv::Mat::zeros(frame.size(), CV_8U);
                     std::vector<std::vector<cv::Point>> face_boundary(1);
-                    createFullFace(sfl_face->landmarks, face_boundary.back());
+                    sfl::createFullFace(sfl_face->landmarks, face_boundary.back());
                     cv::drawContours(face_map, face_boundary, 0, cv::Scalar(255, 255, 255), CV_FILLED);
                     seg = calcSegmentation(face_map, fvs_face.second.regions(), seg_desc);
                 }
                 else seg = calcSegmentation(frame.size(), fvs_face.second.regions(), seg_desc);
+                postprocessSegmentation(seg);
 
                 // Render segmentation
                 cv::Mat seg_render, seg_debug;
@@ -260,14 +261,14 @@ namespace fvs
                     cv::imwrite(str(boost::format("%s\\%s_debug_%04d_face_%04d.jpg") %
                         output_dir_ % src_name_ % frame_number_ % fvs_face.second.id()), seg_debug_cropped);
 
-                /// Debug ///
+                /*/// Debug ///
                 if (options_.debug)
                 {
                     std::ofstream output(str(boost::format("%s\\%s_debug_%04d_face_%04d.txt") %
                         output_dir_ % src_name_ % frame_number_ % fvs_face.second.id()));
                     output <<  fvs_face.second.DebugString();
                 }
-                /////////////
+                /////////////*/
             }
         }
 

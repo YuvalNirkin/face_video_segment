@@ -73,7 +73,7 @@ for i = indices
     end
     
     %% Landmarks cache
-    dstLandmarksFile = [vidName '_landmarks.pb'];
+    dstLandmarksFile = [vidName '.lms'];
     dstLandmarksPath = fullfile(landmarksPath, dstLandmarksFile);
     dstLandmarksPath2 = fullfile(vidPath, dstLandmarksFile);
     if(exist(dstLandmarksPath, 'file') == 2)
@@ -89,7 +89,7 @@ for i = indices
         else
             scales = 1:2;
         end
-        cache_face_landmarks(vidFile, p.Results.landmarks, 'output', dstLandmarksPath, 'scales', scales, 'track', 1);
+        sfl_cache(vidFile, p.Results.landmarks, 'output', dstLandmarksPath, 'scales', scales, 'track', 2);
     end
     
     %% Find regions

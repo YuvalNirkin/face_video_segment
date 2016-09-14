@@ -427,7 +427,7 @@ namespace fvs
             const sfl::Face* face = m_sfl_frames[m_curr_frame_ind]->getFace(m_curr_face_id);
             if (face != nullptr)
             {
-                createFullFace(face->landmarks, m_face_boundary->back());
+                sfl::createFullFace(face->landmarks, m_face_boundary->back());
                 *m_face_map = cv::Mat::zeros(m_scaled_frame->size(), CV_8U);
                 cv::drawContours(*m_face_map, *m_face_boundary, 0, cv::Scalar(255, 255, 255), CV_FILLED);
             }

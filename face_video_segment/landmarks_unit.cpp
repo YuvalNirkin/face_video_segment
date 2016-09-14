@@ -52,7 +52,7 @@ namespace segmentation
 		: options_(options), main_face_id_(0)
 	{
 		sfl_ = sfl::SequenceFaceLandmarks::create(options.landmarks_path,
-			options.frame_scale, options.track_faces);
+			options.frame_scale, options.tracking);
 		if (sfl_->size() > 0)
 		{
 			const std::list<std::unique_ptr<sfl::Frame>>& sequence = sfl_->getSequence();

@@ -32,6 +32,9 @@
 // std
 #include <iostream> // debug
 
+// sfl
+#include <sfl/utilities.h>
+
 // OpenCV
 #include <opencv2/imgproc.hpp>
 
@@ -199,7 +202,7 @@ namespace fvs
         const std::vector<cv::Point>& landmarks)
     {
         std::vector<std::vector<cv::Point>> face(1);
-        createFullFace(landmarks, face.back());
+        sfl::createFullFace(landmarks, face.back());
         cv::Mat face_map = cv::Mat::zeros(size, CV_8U);
 
         // Fill jaw

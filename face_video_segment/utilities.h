@@ -22,8 +22,10 @@ namespace fvs
         const google::protobuf::Map<google::protobuf::uint32, Region>& regions,
         const segmentation::SegmentationDesc& seg_desc);
 
-    void createFullFace(const std::vector<cv::Point>& landmarks,
-        std::vector<cv::Point>& full_face);
+    void postprocessSegmentation(cv::Mat& seg);
+
+//    void createFullFace(const std::vector<cv::Point>& landmarks,
+//        std::vector<cv::Point>& full_face);
 
     /** Render the boundaries of the segmentation regions.
         @param img The image that boundaries will be rendered on.

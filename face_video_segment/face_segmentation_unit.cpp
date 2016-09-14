@@ -617,7 +617,7 @@ namespace fvs
 
 		// Create face map
 		std::vector<std::vector<cv::Point>> face(1);
-		createFullFace(landmarks, face.back());
+		sfl::createFullFace(landmarks, face.back());
 		cv::Mat face_map = cv::Mat::zeros(frame_height_, frame_width_, CV_8U);
 
 		// Draw jaw
@@ -1093,7 +1093,7 @@ namespace fvs
 			renderSegmentation(out_frame, face_seg_data.seg);
 			renderBoundaries(out_frame, seg_desc);
             std::vector<std::vector<cv::Point>> full_face(1);
-            createFullFace(landmarks, full_face.back());
+            sfl::createFullFace(landmarks, full_face.back());
             cv::drawContours(out_frame, full_face, 0, cv::Scalar(47, 255, 173), 1);
 			sfl::render(out_frame, landmarks);
 			/*

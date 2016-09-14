@@ -105,6 +105,54 @@ namespace fvs
         return seg;
     }
 
+    void removeSmallerComponents(cv::Mat& seg)
+    {
+        cv::Mat labels;
+        cv::Mat stats, centroids;
+        cv::connectedComponentsWithStats(seg, labels, stats, centroids);
+        if (stats.rows <= 2) return;
+
+        // Find the label of the connected component with maximum area
+        cv::Mat areas = stats.colRange(4, 5).clone();
+        int* areas_data = (int*)areas.data;
+        int max_label = std::distance(areas_data,
+            std::max_element(areas_data + 1, areas_data + stats.rows));
+
+        // Clear smaller components
+        unsigned char* seg_data = seg.data;
+        int* labels_data = (int*)labels.data;
+        for (size_t i = 0; i < seg.total(); ++i, ++seg_data)
+            if (*labels_data++ != max_label) *seg_data = 0;
+    }
+
+    void smoothFlaws(cv::Mat& seg)
+    {
+        static cv::Mat kernel = cv::getStructuringElement(cv::MorphShapes::MORPH_ELLIPSE, cv::Size(5, 5));
+        cv::morphologyEx(seg, seg, cv::MORPH_OPEN, kernel, cv::Point(-1, -1), 1);
+        cv::morphologyEx(seg, seg, cv::MORPH_CLOSE, kernel, cv::Point(-1, -1), 1);
+    }
+
+    void fillHoles(cv::Mat& seg)
+    {
+        double min_val, max_val;
+        cv::minMaxLoc(seg, &min_val, &max_val);
+        cv::Mat holes = seg.clone();
+        cv::floodFill(holes, cv::Point2i(0, 0), cv::Scalar(max_val));
+        for (size_t i = 0; i < seg.total(); ++i)
+        {
+            if (holes.data[i] == 0)
+                seg.data[i] = (unsigned char)max_val;
+        }
+    }
+
+    void postprocessSegmentation(cv::Mat & seg)
+    {
+        removeSmallerComponents(seg);
+        fillHoles(seg);
+        smoothFlaws(seg);
+    }
+
+    /*
     void createFullFace(const std::vector<cv::Point>& landmarks, std::vector<cv::Point>& full_face)
     {
         if (landmarks.size() != 68) return;
@@ -139,6 +187,7 @@ namespace fvs
         full_face.push_back(landmarks[17] + dir);
         if (landmarks[17].x < landmarks[0].x) full_face.push_back(landmarks[17]);
     }
+    */
 
     void renderBoundaries(cv::Mat& img, int hierarchy_level,
         const SegmentationDesc& desc,
@@ -206,8 +255,8 @@ namespace fvs
             img_data = img.ptr<uchar>(r);
             for (c = 0; c < img.cols; ++c)
             {
-                if (*seg_data++ > 0) *img_data = color;
-                ++img_data;
+                if (*seg_data++ > 0) *img_data++ = color;
+                else *img_data++ = 0;
             }
         }
     }
