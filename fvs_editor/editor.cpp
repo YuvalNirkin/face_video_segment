@@ -65,6 +65,7 @@
 #include <QComboBox>
 #include <QToolButton>
 #include <QStatusBar>
+#include <QCheckBox>
 
 using namespace boost::filesystem;
 
@@ -275,6 +276,14 @@ namespace fvs
         m_next_keyframe_button->setIcon(style()->standardIcon(QStyle::SP_MediaSeekForward));
         connect(m_next_keyframe_button, SIGNAL(clicked()), this, SLOT(nextKeyFrameButtonClicked()));
 
+        // Create keyframe widgets
+        m_toggle_keyframe_checkbox = new QCheckBox(this);
+        m_toggle_keyframe_checkbox->setText("Toggle keyframe");
+        connect(m_toggle_keyframe_checkbox, SIGNAL(clicked(bool)), this, SLOT(toggleKeyframe(bool)));
+        m_keyframe_label = new QLabel(this);
+        m_keyframe_label->setText("");
+        m_keyframe_label->setMinimumWidth(m_toggle_keyframe_checkbox->width());
+
         // GUI layout
         QGridLayout* centralLayout = new QGridLayout;
         centralLayout->addWidget(m_display_widget, 0 ,0, 1, 4);
@@ -288,19 +297,27 @@ namespace fvs
         centralLayout->addWidget(m_max_hierarchy_label, 2, 3);
         centralLayout->addWidget(m_face_id_label, 3, 0);
         centralLayout->addWidget(m_face_id_combobox, 3, 1);
+        
         QHBoxLayout* buttonLayout = new QHBoxLayout;
         buttonLayout->addStretch();
+        //buttonLayout->addLayout(leftLayout);
+        buttonLayout->addWidget(m_toggle_keyframe_checkbox);
+        buttonLayout->addSpacing(8);
         buttonLayout->addWidget(m_previous_keyframe_button);
         buttonLayout->addSpacing(8);
         buttonLayout->addWidget(m_play_button);
         buttonLayout->addSpacing(8);
         buttonLayout->addWidget(m_next_keyframe_button);
+        buttonLayout->addSpacing(8);
+        buttonLayout->addWidget(m_keyframe_label);
         buttonLayout->addStretch();
+        
         //buttonLayout->setAlignment(Qt::AlignCenter);
-        centralLayout->addLayout(buttonLayout, 3, 0, 1, 4);
+        centralLayout->addLayout(buttonLayout, 3, 0, 1, 4); 
         centralLayout->setHorizontalSpacing(0);
         centralLayout->setAlignment(Qt::Alignment(Qt::AlignTop));
         m_main_widget->setLayout(centralLayout);
+
         /*
         QGridLayout* centralLayout = new QGridLayout;
         centralLayout->addWidget(m_display_widget);
@@ -834,23 +851,15 @@ namespace fvs
         return edit_frame;
     }
 
-    Face* Editor::getNearestEditedFace(int frame_id)
+    Face* Editor::getNearestEditedFace(int frame_id, int face_id)
     {
-        if (m_edited_regions->mutable_frames()->empty()) return nullptr;
-        
-        // Find closest frame (assume sorted)
-        Face* edit_face = nullptr;
-        for (Frame& frame : *m_edited_regions->mutable_frames())
-        {
-            if (frame.id() <= frame_id)
-            {
-                auto& face_map = *frame.mutable_faces();
-                edit_face = &face_map[(unsigned int)m_curr_face_id];
-                if(frame.id() == frame_id) break;
-            }
-        }
-
-        return edit_face;
+        // TODO: Rewrite this for each frame
+        Frame* edit_frame = getNearestEditedFrame(frame_id);
+        if (edit_frame == nullptr) return nullptr;
+        auto& face_map = *edit_frame->mutable_faces();
+        auto edit_face = face_map.find(face_id);
+        if (edit_face == face_map.end()) return nullptr;
+        return &edit_face->second;
     }
 
     void Editor::getMergedRegions(int frame_id, int face_id,
@@ -927,6 +936,26 @@ namespace fvs
         getMergedRegions(m_curr_frame_ind, m_curr_face_id, region_map);
     }
 
+    bool Editor::isKeyframe(int frame_id, int face_id)
+    {
+        // Check edit regions
+        Frame* edit_frame = getNearestEditedFrame(frame_id);
+        if(edit_frame != nullptr && edit_frame->id() == frame_id)
+        {
+            auto& edit_face_map = edit_frame->faces();
+            auto& edit_face = edit_face_map.find(face_id);
+            if (edit_face != edit_face_map.end())
+                return edit_face->second.keyframe();
+        }
+
+        // Check input regions
+        const Frame& frame = m_input_regions->frames(frame_id);
+        auto& face_map = frame.faces();
+        auto& face = face_map.find(face_id);
+        if (face == face_map.end()) return false;
+        return face->second.keyframe();
+    }
+
     bool Editor::saveFile(const std::string& filename)
     {
         statusBar()->showMessage(tr("Saving..."));
@@ -985,6 +1014,8 @@ namespace fvs
         //m_curr_frame_ind = n;
         //m_frame_slider->setValue(m_curr_frame_ind);
         m_curr_frame_label->setText(std::to_string(n).c_str());
+        m_toggle_keyframe_checkbox->setCheckState(
+            isKeyframe(n, m_curr_face_id) ? Qt::Checked : Qt::Unchecked);
         seek(n);
     }  
 
@@ -1002,6 +1033,9 @@ namespace fvs
 
     void Editor::previousKeyFrameButtonClicked()
     {
+        int seek_ind = -1;
+
+        // For each input frame before the current frame
         for (int i = m_curr_frame_ind - 1; i >= 0; --i)
         {
             auto& face_map = m_input_regions->frames(i).faces();
@@ -1009,25 +1043,35 @@ namespace fvs
             if (face == face_map.end()) continue;
             if (face->second.keyframe())
             {
-                seek(i);
+                seek_ind = i;
                 break;
             }
         }
-        /*
-        if (m_keyframes.empty()) return;
-        for (int i = (int)m_keyframes.size() - 1; i >= 0; --i)
+
+        // For each edit frame
+        for (int i = m_edited_regions->frames_size() - 1; i >= 0; --i)
         {
-            if (m_keyframes[i] < m_curr_frame_ind)
+            const Frame& edit_frame = m_edited_regions->frames(i);
+            if (edit_frame.id() >= m_curr_frame_ind) continue;
+            auto& face_map = edit_frame.faces();
+            auto& face = face_map.find(m_curr_face_id);
+            if (face == face_map.end()) continue;
+            if (face->second.keyframe())
             {
-                seek(m_keyframes[i]);
+                if (seek_ind < 0) seek_ind = edit_frame.id();
+                else seek_ind = std::max(seek_ind, (int)edit_frame.id());
                 break;
             }
-        }     
-        */
+        }
+
+        if(seek_ind >= 0) seek(seek_ind);
     }
 
     void Editor::nextKeyFrameButtonClicked()
     {
+        int seek_ind = -1;
+
+        // For each input frame after the current frame
         for (int i = m_curr_frame_ind + 1; i < m_total_frames; ++i)
         {
             auto& face_map = m_input_regions->frames(i).faces();
@@ -1035,29 +1079,45 @@ namespace fvs
             if (face == face_map.end()) continue;
             if (face->second.keyframe())
             {
-                seek(i);
+                seek_ind = i;
                 break;
             }
         }
-        /*
-        if (m_keyframes.empty()) return;
-        for (size_t i = 0; i < m_keyframes.size(); ++i)
+
+        // For each edit frame
+        for (const Frame& edit_frame : m_edited_regions->frames())
         {
-            if (m_keyframes[i] > m_curr_frame_ind)
+            if (edit_frame.id() <= m_curr_frame_ind) continue;
+            auto& face_map = edit_frame.faces();
+            auto& face = face_map.find(m_curr_face_id);
+            if (face == face_map.end()) continue;
+            if (face->second.keyframe())
             {
-                seek(m_keyframes[i]);
+                if (seek_ind < 0) seek_ind = edit_frame.id();
+                else seek_ind = std::min(seek_ind, (int)edit_frame.id());
                 break;
             }
         }
-        */
+
+        if (seek_ind >= 0) seek(seek_ind);
     }
 
     void Editor::currFaceIdChanged(const QString& text)
     {
         m_curr_face_id = text.toInt();
+        m_toggle_keyframe_checkbox->setCheckState(
+            isKeyframe(m_curr_frame_ind, m_curr_face_id) ? Qt::Checked : Qt::Unchecked);
         //std::cout << "curr face id = " << m_curr_face_id << std::endl;//
         m_update_face = true;
         updateLater();
+    }
+
+    void Editor::toggleKeyframe(bool checked)
+    {
+        std::cout << checked << std::endl;//
+        Face& face = getFaceForEditing();
+//        face.set_keyframe(state == Qt::Checked);
+        face.set_keyframe(checked);
     }
 
     void Editor::frameSliderPress()

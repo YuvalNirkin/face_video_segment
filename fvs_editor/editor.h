@@ -48,6 +48,7 @@ class QKeyEvent;
 class QComboBox;
 class QToolButton;
 class QString;
+class QCheckBox;
 
 namespace cv
 {
@@ -114,11 +115,12 @@ namespace fvs
         void regionSelected(QMouseEvent* event);
         Face& getFaceForEditing();
         Frame* getNearestEditedFrame(int frame_id);
-        Face* getNearestEditedFace(int frame_id);
+        Face* getNearestEditedFace(int frame_id, int face_id);
         void getMergedRegions(int frame_id, int face_id,
             google::protobuf::Map<unsigned int, Region>& region_map);
         void getCurrMergedRegions(
             google::protobuf::Map<unsigned int, Region>& region_map);
+        bool isKeyframe(int frame_id, int face_id);
         bool saveFile(const std::string& filename);
 
     public slots:
@@ -130,6 +132,7 @@ namespace fvs
         void previousKeyFrameButtonClicked();
         void nextKeyFrameButtonClicked();
         void currFaceIdChanged(const QString& text);
+        void toggleKeyframe(bool checked);
         void newFile();
         void open();
         bool save();
@@ -152,6 +155,8 @@ namespace fvs
         QToolButton* m_play_button;
         QToolButton* m_previous_keyframe_button;
         QToolButton* m_next_keyframe_button;
+        QCheckBox* m_toggle_keyframe_checkbox;
+        QLabel* m_keyframe_label;
 
         bool m_loop;
         bool m_refresh;
