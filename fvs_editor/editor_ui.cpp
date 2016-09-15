@@ -28,6 +28,8 @@
 
 #include "editor.h"
 
+#include <iostream> // Debug
+
 // Qt
 #include <QLabel>
 #include <QSlider>
@@ -101,6 +103,38 @@ namespace fvs
         QMenu *viewMenu = menuBar()->addMenu(tr("&View"));
         QToolBar *viewToolBar = addToolBar(tr("View"));
 
+        // Borders
+        const QIcon bordersIcon = QIcon::fromTheme("view-borders", QIcon(":/images/borders.png"));
+        QAction *bordersAct = new QAction(bordersIcon, tr("&Border"), this);
+        bordersAct->setShortcut(QKeySequence(Qt::CTRL + Qt::Key_B));
+        bordersAct->setCheckable(true);
+        bordersAct->setChecked(true);
+        bordersAct->setStatusTip(tr("Show borders"));
+        connect(bordersAct, SIGNAL(toggled(bool)), this, SLOT(toggleBorders(bool)));
+        viewMenu->addAction(bordersAct);
+        viewToolBar->addAction(bordersAct);
+
+        // Segmentation
+        const QIcon segIcon = QIcon::fromTheme("view-seg", QIcon(":/images/segmentation.png"));
+        QAction *segAct = new QAction(segIcon, tr("Se&gmentation"), this);
+        segAct->setShortcut(QKeySequence(Qt::CTRL + Qt::Key_G));
+        segAct->setCheckable(true);
+        segAct->setChecked(true);
+        segAct->setStatusTip(tr("Show segmentation"));
+        connect(segAct, SIGNAL(toggled(bool)), this, SLOT(toggleSegmentation(bool)));
+        viewMenu->addAction(segAct);
+        viewToolBar->addAction(segAct);
+
+        // Alpha
+        QSlider* alpha_slider = new QSlider(Qt::Horizontal, this);
+        alpha_slider->setMinimum(0);
+        alpha_slider->setMaximum(100);
+        alpha_slider->setValue(50);
+        alpha_slider->setMaximumWidth(64);
+        alpha_slider->setStatusTip("Segmentation Opacity");
+        connect(alpha_slider, SIGNAL(valueChanged(int)), this, SLOT(alphaChanged(int)));
+        viewToolBar->addWidget(alpha_slider);
+
         //////////////////////////////////////////////////////////////////////////////
         // Help Menu
         //////////////////////////////////////////////////////////////////////////////
@@ -139,6 +173,21 @@ namespace fvs
                 "the automatically selected regions for the face segmentation. "
                 "This is especially important for hard cases such as: "
                 "Partial occlusion, bald people, etc."));
+    }
+
+    void Editor::toggleBorders(bool toggled)
+    {
+        std::cout << "Borders = " << toggled << std::endl;
+    }
+
+    void Editor::toggleSegmentation(bool toggled)
+    {
+        std::cout << "Segmentation = " << toggled << std::endl;
+    }
+
+    void Editor::alphaChanged(int n)
+    {
+        std::cout << "alpha = " << (n / 100.0f) << std::endl;
     }
 
 }   // namespace fvs

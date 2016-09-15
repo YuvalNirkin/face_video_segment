@@ -3,5 +3,7 @@
     <file>images/new.png</file>
     <file>images/open.png</file>
     <file>images/save.png</file>
+    <file>images/borders.png</file>
+    <file>images/segmentation.png</file>
 </qresource>
 </RCC>

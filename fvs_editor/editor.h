@@ -138,6 +138,9 @@ namespace fvs
         bool save();
         bool saveAs();
         void about();
+        void toggleBorders(bool toggled);
+        void toggleSegmentation(bool toggled);
+        void alphaChanged(int n);
         
     private:
         QLabel* m_main_widget;
