@@ -90,6 +90,11 @@ namespace fvs
         m_hierarchy_pos(0),
         m_edit_index(-1),
         m_curr_face_id(0),
+        m_render_contours(true),
+        m_render_borders(true),
+        m_render_seg(true),
+        m_postprocess(false),
+        m_alpha(0.0f),
         m_curr_file(fvs_path),
         m_output_dir(output_dir),
         m_video_file(video_file),
@@ -279,6 +284,8 @@ namespace fvs
         // Create keyframe widgets
         m_toggle_keyframe_checkbox = new QCheckBox(this);
         m_toggle_keyframe_checkbox->setText("Toggle keyframe");
+        m_toggle_keyframe_checkbox->setCheckState(
+            isKeyframe(m_curr_frame_ind, m_curr_face_id) ? Qt::Checked : Qt::Unchecked);
         connect(m_toggle_keyframe_checkbox, SIGNAL(clicked(bool)), this, SLOT(toggleKeyframe(bool)));
         m_keyframe_label = new QLabel(this);
         m_keyframe_label->setText("");
@@ -503,13 +510,15 @@ namespace fvs
         if (m_face_boundary->back().empty())
             seg = calcSegmentation(frame.size(), region_map, *m_seg_desc);
         else seg = calcSegmentation(*m_face_map, region_map, *m_seg_desc);
+        if (m_postprocess)
+            postprocessSegmentation(seg);
 
         // Render segmentation
-        renderSegmentationBlend(frame, seg, 0.25f);
-        
-        renderBoundaries(frame, m_curr_hierarchy_level, *m_seg_desc, &m_seg_hierarchy->hierarchy());
+        if(m_render_seg) renderSegmentationBlend(frame, seg, m_alpha);
+        if(m_render_borders) renderBoundaries(frame, m_curr_hierarchy_level,
+            *m_seg_desc, &m_seg_hierarchy->hierarchy());
 
-        if(!m_face_boundary->back().empty())
+        if(m_render_contours && !m_face_boundary->back().empty())
             cv::drawContours(frame, *m_face_boundary, 0, cv::Scalar(0, 255, 0), 1);
     }
 
@@ -976,11 +985,10 @@ namespace fvs
                 if (region_map.empty()) continue;
 
                 auto& face_map = *frame.mutable_faces();
-                *face_map[face_id].mutable_regions() = region_map; 
+                *face_map[face_id].mutable_regions() = region_map;
+                face_map[face_id].set_keyframe(isKeyframe(frame.id(), face_id));
             }
         }
-
-        // TODO: Add new keyframes
 
         /// Debug ///
         if (m_debug)
@@ -998,6 +1006,7 @@ namespace fvs
         */
         /////////////
 
+        // Write to file
         std::ofstream output(filename, std::fstream::trunc | std::fstream::binary);
         sequence.SerializeToOstream(&output);
         

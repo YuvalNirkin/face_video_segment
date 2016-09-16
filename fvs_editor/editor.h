@@ -138,8 +138,10 @@ namespace fvs
         bool save();
         bool saveAs();
         void about();
+        void toggleContours(bool toggled);
         void toggleBorders(bool toggled);
         void toggleSegmentation(bool toggled);
+        void togglePostprocess(bool toggled);
         void alphaChanged(int n);
         
     private:
@@ -185,6 +187,13 @@ namespace fvs
         std::unique_ptr<cv::Mat> m_scaled_frame;
         std::unique_ptr<cv::Mat> m_render_frame;
         std::unique_ptr<QImage> m_render_image;
+
+        // View
+        bool m_render_contours;
+        bool m_render_borders;
+        bool m_render_seg;
+        bool m_postprocess;
+        float m_alpha;
 
         // sfl
         std::shared_ptr<sfl::SequenceFaceLandmarks> m_sfl;

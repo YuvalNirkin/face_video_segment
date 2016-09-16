@@ -103,6 +103,17 @@ namespace fvs
         QMenu *viewMenu = menuBar()->addMenu(tr("&View"));
         QToolBar *viewToolBar = addToolBar(tr("View"));
 
+        // Contours
+        const QIcon contoursIcon = QIcon::fromTheme("view-contours", QIcon(":/images/contours.png"));
+        QAction *contoursAct = new QAction(contoursIcon, tr("&Contours"), this);
+        contoursAct->setShortcut(QKeySequence(Qt::CTRL + Qt::Key_C));
+        contoursAct->setCheckable(true);
+        contoursAct->setChecked(true);
+        contoursAct->setStatusTip(tr("Show face contours"));
+        connect(contoursAct, SIGNAL(toggled(bool)), this, SLOT(toggleContours(bool)));
+        viewMenu->addAction(contoursAct);
+        viewToolBar->addAction(contoursAct);
+
         // Borders
         const QIcon bordersIcon = QIcon::fromTheme("view-borders", QIcon(":/images/borders.png"));
         QAction *bordersAct = new QAction(bordersIcon, tr("&Border"), this);
@@ -129,11 +140,23 @@ namespace fvs
         QSlider* alpha_slider = new QSlider(Qt::Horizontal, this);
         alpha_slider->setMinimum(0);
         alpha_slider->setMaximum(100);
-        alpha_slider->setValue(50);
+        alpha_slider->setValue(25);
+        m_alpha = alpha_slider->value() / 100.0f;
         alpha_slider->setMaximumWidth(64);
         alpha_slider->setStatusTip("Segmentation Opacity");
         connect(alpha_slider, SIGNAL(valueChanged(int)), this, SLOT(alphaChanged(int)));
         viewToolBar->addWidget(alpha_slider);
+
+        // Postprocess
+        const QIcon postIcon = QIcon::fromTheme("view-post", QIcon(":/images/postprocess.png"));
+        QAction *postAct = new QAction(postIcon, tr("&Postprocess"), this);
+        postAct->setShortcut(QKeySequence(Qt::CTRL + Qt::Key_P));
+        postAct->setCheckable(true);
+        postAct->setChecked(false);
+        postAct->setStatusTip(tr("Postprocess segmentation"));
+        connect(postAct, SIGNAL(toggled(bool)), this, SLOT(togglePostprocess(bool)));
+        viewMenu->addAction(postAct);
+        viewToolBar->addAction(postAct);
 
         //////////////////////////////////////////////////////////////////////////////
         // Help Menu
@@ -175,19 +198,39 @@ namespace fvs
                 "Partial occlusion, bald people, etc."));
     }
 
+    void Editor::toggleContours(bool toggled)
+    {
+        m_render_contours = toggled;
+        m_refresh = true;
+        updateLater();
+    }
+
     void Editor::toggleBorders(bool toggled)
     {
-        std::cout << "Borders = " << toggled << std::endl;
+        m_render_borders = toggled;
+        m_refresh = true;
+        updateLater();
     }
 
     void Editor::toggleSegmentation(bool toggled)
     {
-        std::cout << "Segmentation = " << toggled << std::endl;
+        m_render_seg = toggled;
+        m_refresh = true;
+        updateLater();
+    }
+
+    void Editor::togglePostprocess(bool toggled)
+    {
+        m_postprocess = toggled;
+        m_refresh = true;
+        updateLater();
     }
 
     void Editor::alphaChanged(int n)
     {
-        std::cout << "alpha = " << (n / 100.0f) << std::endl;
+        m_alpha = (n / 100.0f);
+        m_refresh = true;
+        updateLater();
     }
 
 }   // namespace fvs
