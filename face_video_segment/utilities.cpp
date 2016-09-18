@@ -309,5 +309,68 @@ namespace fvs
         return left_dist / (left_dist + right_dist);
     }
 
+    cv::Rect getFaceBBoxFromSegmentation(const cv::Mat& seg, bool square)
+    {
+        int xmin(std::numeric_limits<int>::max()), ymin(std::numeric_limits<int>::max()),
+            xmax(-1), ymax(-1), sumx(0), sumy(0);
+        int r, c, foreground_count = 0;
+
+        // For each foreground point
+        unsigned char* seg_data = seg.data;
+        for (r = 0; r < seg.rows; ++r)
+        {
+            for (c = 0; c < seg.cols; ++c)
+            {
+                if (*seg_data++ == 0) continue;
+                xmin = std::min(xmin, c);
+                ymin = std::min(ymin, r);
+                xmax = std::max(xmax, c);
+                ymax = std::max(ymax, r);
+                sumx += c;
+                sumy += r;
+                ++foreground_count;
+            }
+        }
+
+        int width = xmax - xmin + 1;
+        int height = ymax - ymin + 1;
+        int centerx = (xmin + xmax) / 2;
+        int centery = (ymin + ymax) / 2;
+        int avgx = (int)std::round(sumx / foreground_count);
+        int avgy = (int)std::round(sumy / foreground_count);
+        int devx = centerx - avgx;
+        int devy = centery - avgy;
+        int dleft = (int)std::round(0.1*width) + abs(devx < 0 ? devx : 0);
+        int dtop = (int)std::round(height*(std::max(float(width) / height, 1.0f) * 1.5f - 1)) + abs(devy < 0 ? devy : 0);
+        int dright = (int)std::round(0.1*width) + abs(devx > 0 ? devx : 0);
+        int dbottom = (int)std::round(0.1*height) + abs(devy > 0 ? devy : 0);
+
+        // Limit to frame boundaries
+        xmin = std::max(0, xmin - dleft);
+        ymin = std::max(0, ymin - dtop);
+        xmax = std::min(seg.cols - 1, xmax + dright);
+        ymax = std::min(seg.rows - 1, ymax + dbottom);
+
+        // Make square
+        if (square)
+        {
+            int sq_width = std::max(xmax - xmin + 1, ymax - ymin + 1);
+            centerx = (xmin + xmax) / 2;
+            centery = (ymin + ymax) / 2;
+            xmin = centerx - ((sq_width - 1) / 2);
+            ymin = centery - ((sq_width - 1) / 2);
+            xmax = xmin + sq_width - 1;
+            ymax = ymin + sq_width - 1;
+
+            // Limit to frame boundaries
+            xmin = std::max(0, xmin);
+            ymin = std::max(0, ymin);
+            xmax = std::min(seg.cols - 1, xmax);
+            ymax = std::min(seg.rows - 1, ymax);
+        }
+
+        return cv::Rect(cv::Point(xmin, ymin), cv::Point(xmax, ymax));
+    }
+
 }   // namespace fvs
 

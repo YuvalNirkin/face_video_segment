@@ -228,9 +228,11 @@ namespace fvs
                 }
 
                 // Crop frame and segmentation
-                // TODO: Add to utilities: getFaceBBoxFromSegmentation
-                if (sfl_face == nullptr) continue;
-                cv::Rect bbox = sfl::getFaceBBoxFromLandmarks(sfl_face->landmarks, frame.size(), true);
+                cv::Rect bbox;
+                if (sfl_face != nullptr)
+                    bbox = sfl::getFaceBBoxFromLandmarks(sfl_face->landmarks, frame.size(), true);
+                else bbox = getFaceBBoxFromSegmentation(seg, true);
+
                 cv::Mat frame_cropped = frame(bbox);
                 cv::Mat seg_render_cropped = seg_render(bbox);
                 cv::Mat seg_debug_cropped;

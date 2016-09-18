@@ -121,6 +121,7 @@ namespace fvs
         void getCurrMergedRegions(
             google::protobuf::Map<unsigned int, Region>& region_map);
         bool isKeyframe(int frame_id, int face_id);
+        bool isInputKeyframe(int frame_id, int face_id);
         bool saveFile(const std::string& filename);
 
     public slots:

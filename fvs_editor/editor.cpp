@@ -715,6 +715,7 @@ namespace fvs
             auto& edit_face_map = *edit_frame->mutable_faces();
             edit_face = &edit_face_map[(unsigned int)m_curr_face_id];
             edit_face->set_id((unsigned int)m_curr_face_id);
+            edit_face->set_keyframe(isInputKeyframe(m_curr_frame_ind, m_curr_face_id));
 
             // Inherit regions from nearest edit frame
             if (nearest_edit_face != nullptr)
@@ -958,6 +959,11 @@ namespace fvs
         }
 
         // Check input regions
+        return isInputKeyframe(frame_id, face_id);
+    }
+
+    bool Editor::isInputKeyframe(int frame_id, int face_id)
+    {
         const Frame& frame = m_input_regions->frames(frame_id);
         auto& face_map = frame.faces();
         auto& face = face_map.find(face_id);
@@ -986,6 +992,7 @@ namespace fvs
 
                 auto& face_map = *frame.mutable_faces();
                 *face_map[face_id].mutable_regions() = region_map;
+                face_map[face_id].set_id(face_id);
                 face_map[face_id].set_keyframe(isKeyframe(frame.id(), face_id));
             }
         }

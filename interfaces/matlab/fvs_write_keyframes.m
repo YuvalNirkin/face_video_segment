@@ -6,7 +6,7 @@ function fvs_write_keyframes(varargin)
 %   outDir - Path to output directory
 %   max_scale (=0) - Maximum width or height of the keyframes [pixels].
 %   upscale (=0) - If true all keyframes will be upscaled up to max_scale.
-%   verbose (=0) - output debug information level (0 means no debug)
+%   debug (=0) - output debug information level (0 means no debug)
 %
 %FVS_WRITE_KEYFRAMES(fvsFile, outDir, videoFile, segmentationFile,
 %   landmarksFile):

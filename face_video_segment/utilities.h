@@ -57,6 +57,12 @@ namespace fvs
 
     float getFaceDominantSide(const std::vector<cv::Point>& landmarks);
 
+    /** @brief Get face bounding box from segmentation.
+    @param seg The segmentation.
+    @param square Make the bounding box square (limited to segmentation boundaries).
+    */
+    cv::Rect getFaceBBoxFromSegmentation(const cv::Mat& seg, bool square);
+
 }   // namespace fvs
 
 #endif	// __FVG_UTILITIES__
