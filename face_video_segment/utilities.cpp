@@ -151,6 +151,7 @@ namespace fvs
         fillHoles(seg);
         smoothFlaws(seg);
         removeSmallerComponents(seg);
+        fillHoles(seg);
     }
 
     /*

@@ -62,7 +62,7 @@ int main(int argc, char* argv[])
             ("input,i", value<string>(&fvsPath)->required(), "path to face video segmentation (.fvs)")
             ("output,o", value<string>(&outputDir)->required(), "output directory")
             ("segmentation,s", value<string>(&segPath), "input segmentation protobuffer (.pb)")
-            ("landmarks,l", value<string>(&landmarksPath), "path to landmarks cache (.pb)")
+            ("landmarks,l", value<string>(&landmarksPath), "path to landmarks cache (.lms)")
             ("video,v", value<string>(&videoPath), "path to video file")
             ("max_scale,m", value<unsigned int>(&max_scale)->default_value(500),
                 "max keyframe scale [pixels]")
@@ -74,7 +74,7 @@ int main(int argc, char* argv[])
 		store(command_line_parser(argc, argv).options(desc).
 			positional(positional_options_description().add("input", -1)).run(), vm);
 		if (vm.count("help")) {
-			cout << "Usage: face_video_segment [options]" << endl;
+			cout << "Usage: fvs_write_keyframes [options]" << endl;
 			cout << desc << endl;
 			exit(0);
 		}
@@ -84,7 +84,6 @@ int main(int argc, char* argv[])
         fvs::Sequence sequence;
         std::ifstream input(fvsPath, std::ifstream::binary);
         sequence.ParseFromIstream(&input);
-
 
         path inputPath = path(fvsPath);
 		if (!is_regular_file(fvsPath)) 
@@ -105,7 +104,7 @@ int main(int argc, char* argv[])
         if (!is_regular_file(landmarksPath))
         {
             landmarksPath =
-                (inputPath.parent_path() / (inputPath.stem() += "_landmarks.pb")).string();
+                (inputPath.parent_path() / (inputPath.stem() += ".lms")).string();
             if (!is_regular_file(landmarksPath))
                 throw error("Couldn't find landmarks cache file!");
         }
@@ -116,7 +115,7 @@ int main(int argc, char* argv[])
 		exit(1);
 	}
 
-	//try
+	try
 	{
         // Video Reader Unit
         VideoReaderUnit reader(VideoReaderOptions(), videoPath);
@@ -165,11 +164,11 @@ int main(int argc, char* argv[])
         if (!reader.Run())
             throw std::runtime_error("Could not process video file.");
 	}
-	/*catch (std::exception& e)
+	catch (std::exception& e)
 	{
 		cerr << e.what() << endl;
 		return 1;
-	}*/
+	}
 
 	return 0;
 }

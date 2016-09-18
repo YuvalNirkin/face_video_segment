@@ -106,7 +106,7 @@ namespace fvs
         // Contours
         const QIcon contoursIcon = QIcon::fromTheme("view-contours", QIcon(":/images/contours.png"));
         QAction *contoursAct = new QAction(contoursIcon, tr("&Contours"), this);
-        contoursAct->setShortcut(QKeySequence(Qt::CTRL + Qt::Key_C));
+        contoursAct->setShortcut(QKeySequence(Qt::Key_C));
         contoursAct->setCheckable(true);
         contoursAct->setChecked(true);
         contoursAct->setStatusTip(tr("Show face contours"));
@@ -117,7 +117,7 @@ namespace fvs
         // Borders
         const QIcon bordersIcon = QIcon::fromTheme("view-borders", QIcon(":/images/borders.png"));
         QAction *bordersAct = new QAction(bordersIcon, tr("&Border"), this);
-        bordersAct->setShortcut(QKeySequence(Qt::CTRL + Qt::Key_B));
+        bordersAct->setShortcut(QKeySequence(Qt::Key_B));
         bordersAct->setCheckable(true);
         bordersAct->setChecked(true);
         bordersAct->setStatusTip(tr("Show borders"));
@@ -128,7 +128,7 @@ namespace fvs
         // Segmentation
         const QIcon segIcon = QIcon::fromTheme("view-seg", QIcon(":/images/segmentation.png"));
         QAction *segAct = new QAction(segIcon, tr("Se&gmentation"), this);
-        segAct->setShortcut(QKeySequence(Qt::CTRL + Qt::Key_G));
+        segAct->setShortcut(QKeySequence(Qt::Key_S));
         segAct->setCheckable(true);
         segAct->setChecked(true);
         segAct->setStatusTip(tr("Show segmentation"));
@@ -150,7 +150,7 @@ namespace fvs
         // Postprocess
         const QIcon postIcon = QIcon::fromTheme("view-post", QIcon(":/images/postprocess.png"));
         QAction *postAct = new QAction(postIcon, tr("&Postprocess"), this);
-        postAct->setShortcut(QKeySequence(Qt::CTRL + Qt::Key_P));
+        postAct->setShortcut(QKeySequence(Qt::Key_P));
         postAct->setCheckable(true);
         postAct->setChecked(false);
         postAct->setStatusTip(tr("Postprocess segmentation"));

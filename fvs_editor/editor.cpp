@@ -177,9 +177,10 @@ namespace fvs
 
         // Initialize sequence face landmarks
         m_sfl = sfl::SequenceFaceLandmarks::create(m_landmarks_file);
-        if(m_sfl->size() < m_total_frames)
-            throw std::runtime_error(
-                "The number of landmark frames does not match the number of video frames!");
+        m_total_frames = std::min(m_total_frames, m_sfl->size());
+//        if(m_sfl->size() < m_total_frames)
+//            throw std::runtime_error(
+//                "The number of landmark frames does not match the number of video frames!");
         const std::list<std::unique_ptr<sfl::Frame>>& sfl_frames_list =  m_sfl->getSequence();
         m_curr_face_id = m_main_face_id = sfl::getMainFaceID(sfl_frames_list);
         m_sfl_frames.reserve(sfl_frames_list.size());
@@ -226,7 +227,7 @@ namespace fvs
         connect(m_frame_slider, SIGNAL(sliderReleased()), this, SLOT(frameSliderRelease()));
 
         // Hierarchy level slider.
-        m_max_hierarchy_level = 20;
+        m_max_hierarchy_level = 19;
         m_curr_hierarchy_level = 0;
         m_hierarchy_slider = new QSlider(Qt::Horizontal);
         m_hierarchy_slider->setMinimum(0);
@@ -254,7 +255,7 @@ namespace fvs
         m_curr_hierarchy_label->setText(std::to_string(m_curr_hierarchy_level).c_str());
         m_curr_hierarchy_label->setAlignment(Qt::AlignLeft);
         m_max_hierarchy_label = new QLabel(this);
-        m_max_hierarchy_label->setText(std::to_string(m_max_hierarchy_level - 1).c_str());
+        m_max_hierarchy_label->setText(std::to_string(m_max_hierarchy_level).c_str());
         m_max_hierarchy_label->setAlignment(Qt::AlignRight);
 
         m_face_id_label = new QLabel(this);
@@ -273,12 +274,15 @@ namespace fvs
         // Create buttons
         m_play_button = new QToolButton(this);
         m_play_button->setIcon(style()->standardIcon(QStyle::SP_MediaPlay));
+        m_play_button->setShortcut(QKeySequence(Qt::Key_Space));
         connect(m_play_button, SIGNAL(clicked()), this, SLOT(playButtonClicked()));
         m_previous_keyframe_button = new QToolButton(this);
         m_previous_keyframe_button->setIcon(style()->standardIcon(QStyle::SP_MediaSeekBackward));
+        m_previous_keyframe_button->setShortcut(QKeySequence(Qt::Key_Left));
         connect(m_previous_keyframe_button, SIGNAL(clicked()), this, SLOT(previousKeyFrameButtonClicked()));
         m_next_keyframe_button = new QToolButton(this);
         m_next_keyframe_button->setIcon(style()->standardIcon(QStyle::SP_MediaSeekForward));
+        m_next_keyframe_button->setShortcut(QKeySequence(Qt::Key_Right));
         connect(m_next_keyframe_button, SIGNAL(clicked()), this, SLOT(nextKeyFrameButtonClicked()));
 
         // Create keyframe widgets
@@ -286,6 +290,7 @@ namespace fvs
         m_toggle_keyframe_checkbox->setText("Toggle keyframe");
         m_toggle_keyframe_checkbox->setCheckState(
             isKeyframe(m_curr_frame_ind, m_curr_face_id) ? Qt::Checked : Qt::Unchecked);
+        m_toggle_keyframe_checkbox->setShortcut(QKeySequence(Qt::Key_K));
         connect(m_toggle_keyframe_checkbox, SIGNAL(clicked(bool)), this, SLOT(toggleKeyframe(bool)));
         m_keyframe_label = new QLabel(this);
         m_keyframe_label->setText("");
@@ -403,8 +408,15 @@ namespace fvs
         {
         case Qt::Key_Escape:
             close(); break;
-        case Qt::Key_Space:
-            pause(m_loop); break;
+        case Qt::Key_Plus:
+            hierarchyLevelChanged(
+                std::min(m_curr_hierarchy_level + 1, m_max_hierarchy_level));
+            break;
+        case Qt::Key_Minus:
+            hierarchyLevelChanged(std::max(m_curr_hierarchy_level - 1, 0));
+            break;
+//        case Qt::Key_Space:
+//            pause(m_loop); break;
         default: break;
         }
     }

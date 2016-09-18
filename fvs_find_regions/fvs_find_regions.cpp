@@ -52,42 +52,40 @@ using namespace fvs;
 int main(int argc, char* argv[])
 {
 	// Parse command line arguments
-	string inputPath, outputDir, segPath, landmarksPath;
-	int device;
-	unsigned int width, height, verbose;
-	double fps, frame_scale;
-	bool preview;
+    string videoPath, outputDir, segPath, landmarksPath;
+    unsigned int verbose;
 	try {
-		options_description desc("Allowed options");
-		desc.add_options()
-			("help", "display the help message")
-			("input,i", value<string>(&inputPath), "path to video file")
-			("output,o", value<string>(&outputDir), "output directory")
-			("segmentation,s", value<string>(&segPath), "input segmentation protobuffer (.pb)")
-			("landmarks,l", value<string>(&landmarksPath), "path to landmarks model or cache (.pb)")
-			("verbose,v", value<unsigned int>(&verbose)->default_value(0), "output debug information")
-			;
-		variables_map vm;
-		store(command_line_parser(argc, argv).options(desc).
-			positional(positional_options_description().add("input", -1)).run(), vm);
-		if (vm.count("help")) {
-			cout << "Usage: face_video_segment [options]" << endl;
-			cout << desc << endl;
-			exit(0);
-		}
-		notify(vm);
-		if (!is_regular_file(inputPath)) throw error("input must be a path to a file!");
-		if (vm.count("output") && !is_directory(outputDir))
-			throw error("output must be a path to a directory!");
-		if (!is_regular_file(segPath)) throw error("segmentation must be a path to a file!");
-		if (!is_regular_file(landmarksPath))
-		{
-			path input = path(inputPath);
-			landmarksPath =
-				(input.parent_path() / (input.stem() += "_landmarks.pb")).string();
-			if (!is_regular_file(landmarksPath))
-				throw error("Couldn't find landmarks model or cache file!");
-		}
+        options_description desc("Allowed options");
+        desc.add_options()
+            ("help", "display the help message")
+            ("input,i", value<string>(&videoPath)->required(), "path to video file")
+            ("output,o", value<string>(&outputDir)->required(), "output directory")
+            ("segmentation,s", value<string>(&segPath), "input segmentation protobuffer (.pb)")
+            ("landmarks,l", value<string>(&landmarksPath), "path to landmarks cache (.lms)")
+            ("verbose,v", value<unsigned int>(&verbose)->default_value(0), "output debug information")
+            ;
+        variables_map vm;
+        store(command_line_parser(argc, argv).options(desc).
+            positional(positional_options_description().add("input", -1)).run(), vm);
+        if (vm.count("help")) {
+            cout << "Usage: fvs_find_regions [options]" << endl;
+            cout << desc << endl;
+            exit(0);
+        }
+        notify(vm);
+
+        if (!is_regular_file(videoPath)) throw error("input must be a path to a video file!");
+        if (vm.count("output") && !is_directory(outputDir))
+            throw error("output must be a path to a directory!");
+        if (!is_regular_file(segPath)) throw error("segmentation must be a path to a file!");
+        if (!is_regular_file(landmarksPath))
+        {
+            path input = path(videoPath);
+            landmarksPath =
+                (input.parent_path() / (input.stem() += ".lms")).string();
+            if (!is_regular_file(landmarksPath))
+                throw error("Couldn't find landmarks model or cache file!");
+        }
 	}
 	catch (const error& e) {
 		cout << "Error while parsing command-line arguments: " << e.what() << endl;
@@ -98,7 +96,7 @@ int main(int argc, char* argv[])
 	try
 	{
         // Video Reader Unit
-        VideoReaderUnit reader(VideoReaderOptions(), inputPath);
+        VideoReaderUnit reader(VideoReaderOptions(), videoPath);
 
         // Segmentation Reader Unit
         SegmentationReaderUnitOptions segOptions;
@@ -114,7 +112,7 @@ int main(int argc, char* argv[])
 
         // Face Regions Unit
         FaceRegionsOptions face_regions_options;
-        face_regions_options.video_path = inputPath;
+        face_regions_options.video_path = videoPath;
         face_regions_options.seg_path = segPath;
         face_regions_options.landmarks_path = landmarksPath;
         FaceRegionsUnit face_regions_unit(face_regions_options);
@@ -134,7 +132,7 @@ int main(int argc, char* argv[])
             throw std::runtime_error("Could not process video file.");
 
         // Write output to file
-        boost::filesystem::path orig = inputPath;
+        boost::filesystem::path orig = videoPath;
         std::string fvs_out_path = (boost::filesystem::path(outputDir) /
             (orig.stem() += ".fvs")).string();
         std::cout << "Writing face video segmentation to \"" <<
