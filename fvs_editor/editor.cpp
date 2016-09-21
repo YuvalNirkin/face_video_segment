@@ -222,6 +222,7 @@ namespace fvs
         m_frame_slider->setMaximum(m_total_frames - 1);
         m_frame_slider->setTickPosition(QSlider::NoTicks);
         m_frame_slider->setValue(m_curr_frame_ind);
+        m_frame_slider->setFocusPolicy(Qt::NoFocus);
         connect(m_frame_slider, SIGNAL(valueChanged(int)), this, SLOT(frameIndexChanged(int)));
         connect(m_frame_slider, SIGNAL(sliderPressed()), this, SLOT(frameSliderPress()));
         connect(m_frame_slider, SIGNAL(sliderReleased()), this, SLOT(frameSliderRelease()));
@@ -234,6 +235,7 @@ namespace fvs
         m_hierarchy_slider->setMaximum(m_max_hierarchy_level);
         m_hierarchy_slider->setTickPosition(QSlider::TicksBelow);
         m_hierarchy_slider->setValue(m_curr_hierarchy_level);
+        m_hierarchy_slider->setFocusPolicy(Qt::NoFocus);
         //connect(m_hierarchy_slider, SIGNAL(sliderMoved(int)), this, SLOT(ChangeLevel(int)));
         connect(m_hierarchy_slider, SIGNAL(valueChanged(int)), this, SLOT(hierarchyLevelChanged(int)));
         
@@ -269,20 +271,24 @@ namespace fvs
             m_face_id_combobox->addItem(QString::number(face_id));
         }
         m_face_id_combobox->setCurrentText(QString::number(m_curr_face_id));
+        m_face_id_combobox->setFocusPolicy(Qt::NoFocus);
         connect(m_face_id_combobox, SIGNAL(currentTextChanged(const QString&)), this, SLOT(currFaceIdChanged(const QString&)));
 
         // Create buttons
         m_play_button = new QToolButton(this);
         m_play_button->setIcon(style()->standardIcon(QStyle::SP_MediaPlay));
-        m_play_button->setShortcut(QKeySequence(Qt::Key_Space));
+        m_play_button->setShortcut(QKeySequence(Qt::CTRL + Qt::Key_P));    // Qt::Key_Space
+        m_play_button->setFocusPolicy(Qt::NoFocus);
         connect(m_play_button, SIGNAL(clicked()), this, SLOT(playButtonClicked()));
         m_previous_keyframe_button = new QToolButton(this);
         m_previous_keyframe_button->setIcon(style()->standardIcon(QStyle::SP_MediaSeekBackward));
-        m_previous_keyframe_button->setShortcut(QKeySequence(Qt::Key_Left));
+        //m_previous_keyframe_button->setShortcut(QKeySequence(Qt::Key_Left, Qt::Key_Down, Qt::Key_A));
+        m_previous_keyframe_button->setFocusPolicy(Qt::NoFocus);
         connect(m_previous_keyframe_button, SIGNAL(clicked()), this, SLOT(previousKeyFrameButtonClicked()));
         m_next_keyframe_button = new QToolButton(this);
         m_next_keyframe_button->setIcon(style()->standardIcon(QStyle::SP_MediaSeekForward));
-        m_next_keyframe_button->setShortcut(QKeySequence(Qt::Key_Right));
+        //m_next_keyframe_button->setShortcut(QKeySequence(Qt::Key_Right, Qt::Key_Up, Qt::Key_D));
+        m_next_keyframe_button->setFocusPolicy(Qt::NoFocus);
         connect(m_next_keyframe_button, SIGNAL(clicked()), this, SLOT(nextKeyFrameButtonClicked()));
 
         // Create keyframe widgets
@@ -290,7 +296,10 @@ namespace fvs
         m_toggle_keyframe_checkbox->setText("Toggle keyframe");
         m_toggle_keyframe_checkbox->setCheckState(
             isKeyframe(m_curr_frame_ind, m_curr_face_id) ? Qt::Checked : Qt::Unchecked);
+        //m_toggle_keyframe_checkbox->setShortcut(QKeySequence(Qt::Key_K, Qt::Key_Space));
+        //m_toggle_keyframe_checkbox->setShortcut(QKeySequence(Qt::Key_Space));
         m_toggle_keyframe_checkbox->setShortcut(QKeySequence(Qt::Key_K));
+        m_toggle_keyframe_checkbox->setFocusPolicy(Qt::NoFocus);
         connect(m_toggle_keyframe_checkbox, SIGNAL(clicked(bool)), this, SLOT(toggleKeyframe(bool)));
         m_keyframe_label = new QLabel(this);
         m_keyframe_label->setText("");
@@ -364,6 +373,7 @@ namespace fvs
         //m_main_widget->resize(window_size);
         m_main_widget->setMinimumSize(window_size);
         m_main_widget->adjustSize();//
+        m_main_widget->setFocus();//
         //resize(window_size);
         //adjustSize();//
 
@@ -397,6 +407,11 @@ namespace fvs
             regionSelected(mouseEvent);
             return true;
         }
+        if (event->type() == QEvent::KeyPress) {
+            QKeyEvent *keyEvent = static_cast<QKeyEvent*>(event);
+            if (keyEvent->key() == Qt::Key_Space)
+                return true; // mark the event as handled
+        }
         return false;
 
         //return QMainWindow::eventFilter(object, event);
@@ -404,6 +419,9 @@ namespace fvs
 
     void Editor::keyPressEvent(QKeyEvent * event)
     {
+        int i;
+        bool checked;
+
         switch (event->key())
         {
         case Qt::Key_Escape:
@@ -415,9 +433,49 @@ namespace fvs
         case Qt::Key_Minus:
             hierarchyLevelChanged(std::max(m_curr_hierarchy_level - 1, 0));
             break;
-//        case Qt::Key_Space:
-//            pause(m_loop); break;
-        default: break;
+        case Qt::Key_0:
+        case Qt::Key_1:
+        case Qt::Key_2:
+        case Qt::Key_3:
+        case Qt::Key_4:
+        case Qt::Key_5:
+        case Qt::Key_6:
+        case Qt::Key_7:
+        case Qt::Key_8:
+        case Qt::Key_9:
+            i = std::min(event->key() - Qt::Key_0, (int)m_face_ids.size() - 1);
+            m_face_id_combobox->setCurrentIndex(i);
+            //currFaceIdChanged(QString((char)(Qt::Key_0 + i)));
+            break;
+        case Qt::Key_Space:
+        case Qt::Key_K:
+            checked = !isKeyframe(m_curr_frame_ind, m_curr_face_id);
+            toggleKeyframe(checked);
+            m_toggle_keyframe_checkbox->setChecked(checked);
+            break;
+            //toggleKeyframe(!isKeyframe(m_curr_frame_ind, m_curr_face_id));
+            //pause(m_loop); break;
+        case Qt::Key_Home:
+            m_frame_slider->setValue(0);
+            break;
+        case Qt::Key_End:
+            m_frame_slider->setValue(m_total_frames - 1);
+            break;
+        case Qt::Key_Left:
+        case Qt::Key_Down:
+        case Qt::Key_A:
+            m_previous_keyframe_button->click();
+            updateLater();
+            break;
+        case Qt::Key_Right:
+        case Qt::Key_Up:
+        case Qt::Key_D:
+            m_next_keyframe_button->click();
+            updateLater();
+            break;
+        default: 
+            QMainWindow::keyPressEvent(event);
+            break;
         }
     }
 
@@ -1000,12 +1058,12 @@ namespace fvs
             {
                 google::protobuf::Map<unsigned int, Region> region_map;
                 getMergedRegions(frame.id(), face_id, region_map);
-                if (region_map.empty()) continue;
 
                 auto& face_map = *frame.mutable_faces();
-                *face_map[face_id].mutable_regions() = region_map;
                 face_map[face_id].set_id(face_id);
                 face_map[face_id].set_keyframe(isKeyframe(frame.id(), face_id));
+                if (!region_map.empty())
+                    *face_map[face_id].mutable_regions() = region_map;
             }
         }
 
