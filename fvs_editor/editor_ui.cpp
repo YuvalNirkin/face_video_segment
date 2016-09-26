@@ -144,6 +144,7 @@ namespace fvs
         m_alpha = alpha_slider->value() / 100.0f;
         alpha_slider->setMaximumWidth(64);
         alpha_slider->setStatusTip("Segmentation Opacity");
+        alpha_slider->setFocusPolicy(Qt::NoFocus);
         connect(alpha_slider, SIGNAL(valueChanged(int)), this, SLOT(alphaChanged(int)));
         viewToolBar->addWidget(alpha_slider);
 
