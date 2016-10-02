@@ -42,7 +42,7 @@ namespace segmentation {
 		std::string video_stream_name = "VideoStream";
 		std::string landmarks_path = "";
 		float frame_scale = 1.0f;
-        sfl::FaceTrackingType tracking = sfl::TRACKING_LBP;
+        sfl::FaceTrackingType tracking = sfl::TRACKING_BRISK;
 	};
 
 	class LandmarksUnit : public video_framework::VideoUnit {
