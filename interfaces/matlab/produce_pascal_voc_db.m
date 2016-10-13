@@ -9,6 +9,7 @@ addRequired(p, 'outDir', @ischar);
 addParameter(p, 'indices', [], @isvector);
 addParameter(p, 'max_scale', 0, @isscalar);
 addParameter(p, 'upscale', 0, @isscalar);
+addParameter(p, 'copyImages', 1, @isscalar);
 parse(p,varargin{:});
 indices = p.Results.indices;
 
@@ -45,7 +46,7 @@ end
 
 %% Read trainval file
 trainvalFile = fullfile(p.Results.inDir, 'trainval.csv');
-T = readtable(trainvalFile,'Delimiter',';','Format', '%s%s%s');
+T = readtable(trainvalFile,'Delimiter',';','Format', '%s%s%s%s');
 names = table2cell(T(:,1));
 targets = table2cell(T(:,2));
 if(length(dirNames) ~= length(names))
@@ -79,9 +80,11 @@ for i = indices
     
     %% Copy files
     dstNames = calc_dst_names(srcFrames);
-    process_files(srcFrames, dstNames, dirPath, framesPath, 'bicubic');
-    process_files(srcSegmentations, dstNames, dirPath,...
-        segmentationsPath, 'nearest');
+    if(p.Results.copyImages)
+        process_files(srcFrames, dstNames, dirPath, framesPath, 'bicubic');
+        process_files(srcSegmentations, dstNames, dirPath,...
+            segmentationsPath, 'nearest');
+    end
     
     %% Add images to training and valuation sets
     if(strcmp(targets{i}, 'train'))
