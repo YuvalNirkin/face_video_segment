@@ -7,5 +7,10 @@
     <file>images/borders.png</file>
     <file>images/segmentation.png</file>
     <file>images/postprocess.png</file>
+    <file>images/postprocess_disconnected.png</file>
+    <file>images/postprocess_holes.png</file>
+    <file>images/postprocess_smooth.png</file>
+    <file>images/iterations.png</file>
+    <file>images/radius.png</file>
 </qresource>
 </RCC>

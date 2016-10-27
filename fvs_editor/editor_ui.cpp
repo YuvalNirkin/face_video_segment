@@ -30,6 +30,9 @@
 
 #include <iostream> // Debug
 
+// face segmentation
+#include <face_video_segment.pb.h>
+
 // Qt
 #include <QLabel>
 #include <QSlider>
@@ -45,6 +48,7 @@
 #include <QMenuBar>
 #include <QStatusBar>
 #include <QMessageBox>
+#include <QSpinBox>
 
 namespace fvs
 {
@@ -160,6 +164,74 @@ namespace fvs
         viewToolBar->addAction(postAct);
 
         //////////////////////////////////////////////////////////////////////////////
+        // Postprocessing Menu
+        //////////////////////////////////////////////////////////////////////////////
+        QMenu *postMenu = menuBar()->addMenu(tr("&Postprocessing"));
+        QToolBar *postToolBar = addToolBar(tr("Postprocessing"));
+
+        // Disconnected
+        const QIcon disconnectedIcon = QIcon::fromTheme("Postprocessing-disconnected",
+            QIcon(":/images/postprocess_disconnected.png"));
+        m_disconnectedAct = new QAction(disconnectedIcon, tr("&Disconnected"), this);
+        m_disconnectedAct->setCheckable(true);
+        m_disconnectedAct->setChecked(true);
+        m_disconnectedAct->setStatusTip(tr("Removed smaller disconnected segmented pixel components"));
+        connect(m_disconnectedAct, SIGNAL(toggled(bool)), this, SLOT(toggleDisconnected(bool)));
+        postMenu->addAction(m_disconnectedAct);
+        postToolBar->addAction(m_disconnectedAct);
+
+        // Holes
+        const QIcon holesIcon = QIcon::fromTheme("Postprocessing-holes",
+            QIcon(":/images/postprocess_holes.png"));
+        m_holesAct = new QAction(holesIcon, tr("&Holes"), this);
+        m_holesAct->setCheckable(true);
+        m_holesAct->setChecked(true);
+        m_holesAct->setStatusTip(tr("Fill holes in the segmentation"));
+        connect(m_holesAct, SIGNAL(toggled(bool)), this, SLOT(toggleHoles(bool)));
+        postMenu->addAction(m_holesAct);
+        postToolBar->addAction(m_holesAct);
+
+        // Smooth
+        const QIcon smoothIcon = QIcon::fromTheme("Postprocessing-smooth",
+            QIcon(":/images/postprocess_smooth.png"));
+        m_smoothAct = new QAction(smoothIcon, tr("&Smooth"), this);
+        m_smoothAct->setCheckable(true);
+        m_smoothAct->setChecked(true);
+        m_smoothAct->setStatusTip(tr("Smooth the segmentation"));
+        connect(m_smoothAct, SIGNAL(toggled(bool)), this, SLOT(toggleSmooth(bool)));
+        postMenu->addAction(m_smoothAct);
+        postToolBar->addAction(m_smoothAct);
+
+        // Smooth iterations
+        postToolBar->addSeparator();
+        QPixmap iterationsPixmap(":/images/iterations.png");
+        m_smooth_iterations_label = new QLabel(this);
+        m_smooth_iterations_label->setPixmap(iterationsPixmap);
+        postToolBar->addWidget(m_smooth_iterations_label);
+        m_smooth_iterations_spinbox = new QSpinBox(this);
+        m_smooth_iterations_spinbox->setMinimum(1);
+        m_smooth_iterations_spinbox->setMaximum(10);
+        m_smooth_iterations_spinbox->setStatusTip("Smooth iterations");
+        m_smooth_iterations_spinbox->setFocusPolicy(Qt::NoFocus);
+        connect(m_smooth_iterations_spinbox, SIGNAL(valueChanged(int)), this, SLOT(smoothIterationsChanged(int)));
+        postToolBar->addWidget(m_smooth_iterations_spinbox);
+
+        // Smooth kernel radius
+        postToolBar->addSeparator();
+        QPixmap radiusPixmap(":/images/radius.png");
+        m_smooth_kernel_radius_label = new QLabel(this);
+        m_smooth_kernel_radius_label->setPixmap(radiusPixmap);
+        postToolBar->addWidget(m_smooth_kernel_radius_label);
+        m_smooth_kernel_radius_spinbox = new QSpinBox(this);
+        m_smooth_kernel_radius_spinbox->setMinimum(1);
+        m_smooth_kernel_radius_spinbox->setMaximum(10);
+        m_smooth_kernel_radius_spinbox->setValue(2);
+        m_smooth_kernel_radius_spinbox->setStatusTip("Smooth kernel radius");
+        m_smooth_kernel_radius_spinbox->setFocusPolicy(Qt::NoFocus);
+        connect(m_smooth_kernel_radius_spinbox, SIGNAL(valueChanged(int)), this, SLOT(smoothKernelRadiusChanged(int)));
+        postToolBar->addWidget(m_smooth_kernel_radius_spinbox);
+
+        //////////////////////////////////////////////////////////////////////////////
         // Help Menu
         //////////////////////////////////////////////////////////////////////////////
         QMenu *helpMenu = menuBar()->addMenu(tr("&Help"));
@@ -234,5 +306,40 @@ namespace fvs
         updateLater();
     }
 
+    void Editor::toggleDisconnected(bool toggled)
+    {
+        Face& face = getFaceForEditing();
+        initPostprocessing(face);
+        face.mutable_postprocessing()->set_disconnected(toggled);
+    }
+
+    void Editor::toggleHoles(bool toggled)
+    {
+        Face& face = getFaceForEditing();
+        initPostprocessing(face);
+        face.mutable_postprocessing()->set_holes(toggled);
+    }
+
+    void Editor::toggleSmooth(bool toggled)
+    {
+        Face& face = getFaceForEditing();
+        initPostprocessing(face);
+        face.mutable_postprocessing()->set_smooth(toggled);
+    }
+
+    void Editor::smoothIterationsChanged(int i)
+    {
+        Face& face = getFaceForEditing();
+        initPostprocessing(face);
+        face.mutable_postprocessing()->set_smooth_iterations(i);
+    }
+
+    void Editor::smoothKernelRadiusChanged(int r)
+    {
+        Face& face = getFaceForEditing();
+        initPostprocessing(face);
+        face.mutable_postprocessing()->set_smooth_kernel_radius(r);
+    }
+  
 }   // namespace fvs
 

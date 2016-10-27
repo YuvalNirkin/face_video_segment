@@ -49,6 +49,8 @@ class QComboBox;
 class QToolButton;
 class QString;
 class QCheckBox;
+class QSpinBox;
+class QAction;
 
 namespace cv
 {
@@ -116,6 +118,8 @@ namespace fvs
         Face& getFaceForEditing();
         Frame* getNearestEditedFrame(int frame_id);
         Face* getNearestEditedFace(int frame_id, int face_id);
+        Face* getExistingEditedFace(int frame_id, int face_id);
+        Face* getExistingInputFace(int frame_id, int face_id);
         void getMergedRegions(int frame_id, int face_id,
             google::protobuf::Map<unsigned int, Region>& region_map);
         void getCurrMergedRegions(
@@ -123,6 +127,8 @@ namespace fvs
         bool isKeyframe(int frame_id, int face_id);
         bool isInputKeyframe(int frame_id, int face_id);
         bool saveFile(const std::string& filename);
+        void initPostprocessing(Face& face);
+        void updatePostprocessing(int frame_id, int face_id);
 
     public slots:
         void frameIndexChanged(int);
@@ -144,6 +150,11 @@ namespace fvs
         void toggleSegmentation(bool toggled);
         void togglePostprocess(bool toggled);
         void alphaChanged(int n);
+        void toggleDisconnected(bool toggled);
+        void toggleHoles(bool toggled);
+        void toggleSmooth(bool toggled);
+        void smoothIterationsChanged(int i);
+        void smoothKernelRadiusChanged(int r);
         
     private:
         QLabel* m_main_widget;
@@ -163,6 +174,13 @@ namespace fvs
         QToolButton* m_next_keyframe_button;
         QCheckBox* m_toggle_keyframe_checkbox;
         QLabel* m_keyframe_label;
+        QAction* m_disconnectedAct;
+        QAction* m_holesAct;
+        QAction* m_smoothAct;
+        QLabel* m_smooth_iterations_label;
+        QLabel* m_smooth_kernel_radius_label;
+        QSpinBox* m_smooth_iterations_spinbox;
+        QSpinBox* m_smooth_kernel_radius_spinbox;
 
         bool m_loop;
         bool m_refresh;

@@ -20,6 +20,7 @@ message Face {
 	uint32 id = 1;
     bool keyframe = 2;
     map<uint32, Region> regions = 3;
+    Postprocessing postprocessing = 4;
 }
 
 message Region {
@@ -31,4 +32,12 @@ enum PolygonType {
     EMPTY = 0;
     FULL = 1;
     INTERSECTION = 2;
+}
+
+message Postprocessing {
+    bool disconnected = 1;
+    bool holes = 2;
+    bool smooth = 3;
+    uint32 smooth_iterations = 4;
+    uint32 smooth_kernel_radius = 5;
 }

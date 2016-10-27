@@ -66,6 +66,8 @@
 #include <QToolButton>
 #include <QStatusBar>
 #include <QCheckBox>
+#include <QAction>
+#include <QSpinBox>
 
 using namespace boost::filesystem;
 
@@ -580,8 +582,20 @@ namespace fvs
         if (m_face_boundary->back().empty())
             seg = calcSegmentation(frame.size(), region_map, *m_seg_desc);
         else seg = calcSegmentation(*m_face_map, region_map, *m_seg_desc);
+        
+        // Postprocess segmentation
         if (m_postprocess)
-            postprocessSegmentation(seg);
+        {
+            Face* face = getExistingEditedFace(m_curr_frame_ind, m_curr_face_id);
+            if(face == nullptr) face = getExistingInputFace(m_curr_frame_ind, m_curr_face_id);
+            if (face != nullptr && face->has_postprocessing())
+            {
+                const Postprocessing& post = face->postprocessing();
+                postprocessSegmentation(seg, post.disconnected(), post.holes(),
+                    post.smooth(), post.smooth_iterations(), post.smooth_kernel_radius());
+            }
+            else postprocessSegmentation(seg);
+        }
 
         // Render segmentation
         if(m_render_seg) renderSegmentationBlend(frame, seg, m_alpha);
@@ -942,6 +956,29 @@ namespace fvs
         return &edit_face->second;
     }
 
+    Face* Editor::getExistingEditedFace(int frame_id, int face_id)
+    {
+        Frame* edit_frame = getNearestEditedFrame(frame_id);
+        if (edit_frame == nullptr || edit_frame->id() != frame_id)
+            return nullptr;
+
+        auto& edit_face_map = *edit_frame->mutable_faces();
+        auto& edit_face = edit_face_map.find(face_id);
+        if (edit_face == edit_face_map.end()) return nullptr;
+        return &edit_face->second;
+    }
+
+    Face * Editor::getExistingInputFace(int frame_id, int face_id)
+    {
+        Frame* frame = m_input_regions->mutable_frames(frame_id);
+        if(frame == nullptr) return nullptr;
+
+        auto& face_map = *frame->mutable_faces();
+        auto& face = face_map.find(face_id);
+        if (face == face_map.end()) return nullptr;
+        return &face->second;
+    }
+
     void Editor::getMergedRegions(int frame_id, int face_id,
         google::protobuf::Map<unsigned int, Region>& region_map)
     {
@@ -1019,6 +1056,7 @@ namespace fvs
     bool Editor::isKeyframe(int frame_id, int face_id)
     {
         // Check edit regions
+        /*
         Frame* edit_frame = getNearestEditedFrame(frame_id);
         if(edit_frame != nullptr && edit_frame->id() == frame_id)
         {
@@ -1026,7 +1064,9 @@ namespace fvs
             auto& edit_face = edit_face_map.find(face_id);
             if (edit_face != edit_face_map.end())
                 return edit_face->second.keyframe();
-        }
+        }*/
+        Face* edit_face = getExistingEditedFace(frame_id, face_id);
+        if(edit_face != nullptr) return edit_face->keyframe();
 
         // Check input regions
         return isInputKeyframe(frame_id, face_id);
@@ -1064,6 +1104,14 @@ namespace fvs
                 face_map[face_id].set_keyframe(isKeyframe(frame.id(), face_id));
                 if (!region_map.empty())
                     *face_map[face_id].mutable_regions() = region_map;
+
+                // Save postprocessing
+                Face* edit_face = getExistingEditedFace(frame.id(), face_id);
+                if (edit_face != nullptr && edit_face->has_postprocessing())
+                    *face_map[face_id].mutable_postprocessing() = 
+                        *edit_face->mutable_postprocessing();
+ //                   face_map[face_id].set_allocated_postprocessing(
+ //                       edit_face->mutable_postprocessing());
             }
         }
 
@@ -1095,13 +1143,57 @@ namespace fvs
         return true;
     }
 
+    void Editor::initPostprocessing(Face & face)
+    {
+        if (face.has_postprocessing()) return;
+        Postprocessing* post = face.mutable_postprocessing();
+        post->set_disconnected(true);
+        post->set_holes(true);
+        post->set_smooth(true);
+        post->set_smooth_iterations(1);
+        post->set_smooth_kernel_radius(2);
+    }
+
+    void Editor::updatePostprocessing(int frame_id, int face_id)
+    {
+        Face* edit_face = getExistingEditedFace(frame_id, face_id);
+        m_disconnectedAct->blockSignals(true);
+        m_holesAct->blockSignals(true);
+        m_smoothAct->blockSignals(true);
+        m_smooth_iterations_spinbox->blockSignals(true);
+        m_smooth_kernel_radius_spinbox->blockSignals(true);
+        if (edit_face == nullptr || !edit_face->has_postprocessing())
+        {
+            // Set postprocessing defaults
+            m_disconnectedAct->setChecked(true);
+            m_holesAct->setChecked(true);
+            m_smoothAct->setChecked(true);
+            m_smooth_iterations_spinbox->setValue(1);
+            m_smooth_kernel_radius_spinbox->setValue(2);
+        }
+        else
+        {
+            // Set edit face's postprocessing configuration
+            const Postprocessing& post = edit_face->postprocessing();
+            m_disconnectedAct->setChecked(post.disconnected());
+            m_holesAct->setChecked(post.holes());
+            m_smoothAct->setChecked(post.smooth());
+            m_smooth_iterations_spinbox->setValue(post.smooth_iterations());
+            m_smooth_kernel_radius_spinbox->setValue(post.smooth_kernel_radius());
+        }
+        m_disconnectedAct->blockSignals(false);
+        m_holesAct->blockSignals(false);
+        m_smoothAct->blockSignals(false);
+        m_smooth_iterations_spinbox->blockSignals(false);
+        m_smooth_kernel_radius_spinbox->blockSignals(false);
+    }
+
     void Editor::frameIndexChanged(int n)
     {
-        //m_curr_frame_ind = n;
-        //m_frame_slider->setValue(m_curr_frame_ind);
         m_curr_frame_label->setText(std::to_string(n).c_str());
         m_toggle_keyframe_checkbox->setCheckState(
             isKeyframe(n, m_curr_face_id) ? Qt::Checked : Qt::Unchecked);
+        updatePostprocessing(n, m_curr_face_id);
         seek(n);
     }  
 
@@ -1193,14 +1285,14 @@ namespace fvs
         m_curr_face_id = text.toInt();
         m_toggle_keyframe_checkbox->setCheckState(
             isKeyframe(m_curr_frame_ind, m_curr_face_id) ? Qt::Checked : Qt::Unchecked);
-        //std::cout << "curr face id = " << m_curr_face_id << std::endl;//
+        updatePostprocessing(m_curr_frame_ind, m_curr_face_id);
         m_update_face = true;
         updateLater();
     }
 
     void Editor::toggleKeyframe(bool checked)
     {
-        std::cout << checked << std::endl;//
+        //std::cout << checked << std::endl;//
         Face& face = getFaceForEditing();
 //        face.set_keyframe(state == Qt::Checked);
         face.set_keyframe(checked);

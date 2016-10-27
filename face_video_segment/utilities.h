@@ -22,7 +22,9 @@ namespace fvs
         const google::protobuf::Map<google::protobuf::uint32, Region>& regions,
         const segmentation::SegmentationDesc& seg_desc);
 
-    void postprocessSegmentation(cv::Mat& seg);
+    void postprocessSegmentation(cv::Mat& seg, bool disconnected = true,
+        bool holes = true, bool smooth = true, int smooth_iterations = 1,
+        int smooth_kernel_radius = 2);
 
 //    void createFullFace(const std::vector<cv::Point>& landmarks,
 //        std::vector<cv::Point>& full_face);

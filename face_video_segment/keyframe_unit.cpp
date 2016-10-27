@@ -215,7 +215,15 @@ namespace fvs
                     seg = calcSegmentation(face_map, fvs_face.second.regions(), seg_desc);
                 }
                 else seg = calcSegmentation(frame.size(), fvs_face.second.regions(), seg_desc);
-                postprocessSegmentation(seg);
+
+                // Postprocess segmentation
+                if (fvs_face.second.has_postprocessing())
+                {
+                    const Postprocessing& post = fvs_face.second.postprocessing();
+                    postprocessSegmentation(seg, post.disconnected(), post.holes(),
+                        post.smooth(), post.smooth_iterations(), post.smooth_kernel_radius());
+                }
+                else postprocessSegmentation(seg);
 
                 // Render segmentation
                 cv::Mat seg_render, seg_debug;

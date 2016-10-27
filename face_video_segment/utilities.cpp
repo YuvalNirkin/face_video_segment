@@ -125,11 +125,16 @@ namespace fvs
             if (*labels_data++ != max_label) *seg_data = 0;
     }
 
-    void smoothFlaws(cv::Mat& seg)
+    void smoothFlaws(cv::Mat& seg, int smooth_iterations = 1, int smooth_kernel_radius = 2)
     {
-        static cv::Mat kernel = cv::getStructuringElement(cv::MorphShapes::MORPH_ELLIPSE, cv::Size(5, 5));
-        cv::morphologyEx(seg, seg, cv::MORPH_OPEN, kernel, cv::Point(-1, -1), 1);
-        cv::morphologyEx(seg, seg, cv::MORPH_CLOSE, kernel, cv::Point(-1, -1), 1);
+        int kernel_size = smooth_kernel_radius * 2 + 1;
+        cv::Mat kernel = cv::getStructuringElement(
+            cv::MorphShapes::MORPH_ELLIPSE, cv::Size(kernel_size, kernel_size));
+//        for (int i = 0; i < smooth_iterations; ++i)
+        {
+            cv::morphologyEx(seg, seg, cv::MORPH_OPEN, kernel, cv::Point(-1, -1), smooth_iterations);
+            cv::morphologyEx(seg, seg, cv::MORPH_CLOSE, kernel, cv::Point(-1, -1), smooth_iterations);
+        }
     }
 
     void fillHoles(cv::Mat& seg)
@@ -145,51 +150,15 @@ namespace fvs
         }
     }
 
-    void postprocessSegmentation(cv::Mat & seg)
+    void postprocessSegmentation(cv::Mat & seg, bool disconnected,
+        bool holes, bool smooth, int smooth_iterations, int smooth_kernel_radius)
     {
-        removeSmallerComponents(seg);
-        fillHoles(seg);
-        smoothFlaws(seg);
-        removeSmallerComponents(seg);
-        fillHoles(seg);
+        if(disconnected) removeSmallerComponents(seg);
+        if(holes) fillHoles(seg);
+        if(smooth) smoothFlaws(seg, smooth_iterations, smooth_kernel_radius);
+        if(disconnected) removeSmallerComponents(seg);
+        if(holes) fillHoles(seg);
     }
-
-    /*
-    void createFullFace(const std::vector<cv::Point>& landmarks, std::vector<cv::Point>& full_face)
-    {
-        if (landmarks.size() != 68) return;
-
-        // Jaw line
-        full_face = {
-            { landmarks[0] },
-            { landmarks[1] },
-            { landmarks[2] },
-            { landmarks[3] },
-            { landmarks[4] },
-            { landmarks[5] },
-            { landmarks[6] },
-            { landmarks[7] },
-            { landmarks[8] },
-            { landmarks[9] },
-            { landmarks[10] },
-            { landmarks[11] },
-            { landmarks[12] },
-            { landmarks[13] },
-            { landmarks[14] },
-            { landmarks[15] },
-            { landmarks[16] }
-        };
-
-        // Forehead
-        cv::Point dir = (landmarks[27] - landmarks[30]);
-        if (landmarks[26].x > landmarks[16].x) full_face.push_back(landmarks[26]);
-        full_face.push_back(landmarks[26] + dir);
-        full_face.push_back(landmarks[24] + dir);
-        full_face.push_back(landmarks[19] + dir);
-        full_face.push_back(landmarks[17] + dir);
-        if (landmarks[17].x < landmarks[0].x) full_face.push_back(landmarks[17]);
-    }
-    */
 
     void renderBoundaries(cv::Mat& img, int hierarchy_level,
         const SegmentationDesc& desc,
