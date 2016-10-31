@@ -119,8 +119,8 @@ int main(int argc, char* argv[])
 	try
 	{
         // Video Reader Unit
-        VideoReaderUnit reader(VideoReaderOptions(), videoPath);
-        //VideoReaderUnit2 reader(VideoReader2Options(), videoPath);
+        //VideoReaderUnit reader(VideoReaderOptions(), videoPath);
+        VideoReaderUnit2 reader(VideoReader2Options(), videoPath);
 
         // Segmentation Reader Unit
         SegmentationReaderUnitOptions segOptions;

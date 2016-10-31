@@ -12,6 +12,7 @@ addParameter(p, 'minWidth', 0, @isscalar);
 addParameter(p, 'minHeight', 0, @isscalar);
 addParameter(p, 'maxScaleWidth', 0, @isscalar);
 addParameter(p, 'maxScaleHeight', 0, @isscalar);
+addParameter(p, 'track', 2, @isscalar);
 addParameter(p, 'verbose', 0, @isscalar);
 parse(p,varargin{:});
 indices = p.Results.indices;
@@ -69,7 +70,8 @@ for i = indices
         copyfile(dstSegTreePath2, segTreesPath);
     else
         disp(['Creating segmentation tree "' dstSegTreeFile '".']);
-        seg_tree(vidFile, segTreesPath, 'verbose', 0);
+        %seg_tree(vidFile, segTreesPath, 'verbose', 0);
+        fvs_segment(vidFile, 'outFile', dstSegTreePath);
     end
     
     %% Landmarks cache
@@ -89,7 +91,7 @@ for i = indices
         else
             scales = 1:2;
         end
-        sfl_cache(vidFile, p.Results.landmarks, 'output', dstLandmarksPath, 'scales', scales, 'track', 2);
+        sfl_cache(vidFile, p.Results.landmarks, 'output', dstLandmarksPath, 'scales', scales, 'track', p.Results.track);
     end
     
     %% Find regions

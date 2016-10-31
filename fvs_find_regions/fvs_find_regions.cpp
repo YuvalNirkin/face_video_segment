@@ -28,6 +28,7 @@
 
 #include "landmarks_unit.h"
 #include "face_segmentation_unit.h"
+#include "video_reader_unit2.h"
 #include "video_writer_unit2.h"
 #include "keyframe_unit.h"
 #include <video_framework/video_reader_unit.h>
@@ -96,7 +97,8 @@ int main(int argc, char* argv[])
 	try
 	{
         // Video Reader Unit
-        VideoReaderUnit reader(VideoReaderOptions(), videoPath);
+        //VideoReaderUnit reader(VideoReaderOptions(), videoPath);
+        VideoReaderUnit2 reader(VideoReader2Options(), videoPath);
 
         // Segmentation Reader Unit
         SegmentationReaderUnitOptions segOptions;
