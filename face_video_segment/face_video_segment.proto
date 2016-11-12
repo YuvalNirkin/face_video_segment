@@ -21,6 +21,7 @@ message Face {
     bool keyframe = 2;
     map<uint32, Region> regions = 3;
     Postprocessing postprocessing = 4;
+    repeated Point silhouette = 5;
 }
 
 message Region {
@@ -40,4 +41,9 @@ message Postprocessing {
     bool smooth = 3;
     uint32 smooth_iterations = 4;
     uint32 smooth_kernel_radius = 5;
+}
+
+message Point {
+	int32 x = 1;
+	int32 y = 2;
 }
