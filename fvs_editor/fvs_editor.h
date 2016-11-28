@@ -44,6 +44,10 @@ namespace fvs
         std::string sequence_path;
         std::string landmarks_path;
 
+        // Extra UI components
+        QSpinBox* smooth_iterations_spinbox;
+        QSpinBox* smooth_kernel_radius_spinbox;
+
         // Video
         //std::unique_ptr<vsal::VideoStreamOpenCV> vs;
         cv::Mat frame, resized_frame, landmarks_render_frame;
