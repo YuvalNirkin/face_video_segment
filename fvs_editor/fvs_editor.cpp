@@ -1,184 +1,117 @@
-#include "fvs_editor.h"
-//#include <vsal/VideoStreamFactory.h>
-#include <sfl/utilities.h>
+// Copyright (c) 2010-2014, The Video Segmentation Project
+// All rights reserved.
 
-#include <exception>
-#include <iostream>//
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are met:
+//     * Redistributions of source code must retain the above copyright
+//       notice, this list of conditions and the following disclaimer.
+//     * Redistributions in binary form must reproduce the above copyright
+//       notice, this list of conditions and the following disclaimer in the
+//       documentation and/or other materials provided with the distribution.
+//     * Neither the name of the The Video Segmentation Project nor the
+//       names of its contributors may be used to endorse or promote products
+//       derived from this software without specific prior written permission.
 
-// Boost
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+// "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+// LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+// A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+// OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+// SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+// LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+// DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+// THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
+// ---
+
+#include "editor.h"
+#include <iostream>
+#include <string>
+#include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>
 
-// OpenCV
-#include <opencv2/imgproc.hpp>
-#include <opencv2/highgui.hpp>
+#include <video_framework/video_reader_unit.h>
+#include <video_framework/video_display_unit.h>
+#include <video_framework/video_writer_unit.h>
+#include <video_framework/video_pipeline.h>
+#include <segmentation/segmentation_unit.h>
+#include <video_display_qt/video_display_qt_unit.h>
 
-// Qt
-#include <QEventTransition>
-#include <QKeyEventTransition>
-#include <QSignalTransition>
-#include <QFileDialog>
-#include <QResizeEvent>
-#include <QSlider>
-#include <QMessageBox>//
+#include <QApplication>
 
+using std::string;
+using std::cout;
+using std::endl;
+using std::cerr;
+using namespace boost::program_options;
 using namespace boost::filesystem;
+using namespace video_framework;
+using namespace segmentation;
 
-namespace fvs
+int main(int argc, char* argv[])
 {
-    Editor::Editor() : 
-        sm(this)
-    {
-        setupUi(this);
-        setupBl();
-    }
+	// Parse command line arguments
+	string fvsPath, outputDir, segPath, landmarksPath, videoPath;
+    unsigned int debug;
+	try {
+		options_description desc("Allowed options");
+		desc.add_options()
+			("help", "display the help message")
+			("input,i", value<string>(&fvsPath)->required(), 
+                "path to face video segmentation (.fvs)")
+			("output,o", value<string>(&outputDir), "output directory")
+			("segmentation,s", value<string>(&segPath), "input segmentation protobuffer (.pb)")
+            ("landmarks,l", value<string>(&landmarksPath), "path to landmarks cache (.pb)")
+			("video,v", value<string>(&videoPath), "path to video file")
+            ("debug,d", value<unsigned int>(&debug)->default_value(0), "output debug information")
+			;
+		variables_map vm;
+		store(command_line_parser(argc, argv).options(desc).
+			positional(positional_options_description().add("input", -1)).run(), vm);
+		if (vm.count("help")) {
+			cout << "Usage: face_video_segment [options]" << endl;
+			cout << desc << endl;
+			exit(0);
+		}
+		notify(vm);
+		if (!is_regular_file(fvsPath)) throw error("input must be a path to a file!");
+		if (vm.count("output") && !is_directory(outputDir))
+			throw error("output must be a path to a directory!");
+        /*
+		if (!is_regular_file(segPath)) throw error("segmentation must be a path to a file!");
+        if (!is_regular_file(landmarksPath))
+        {
+            path input = path(inputPath);
+            landmarksPath =
+                (input.parent_path() / (input.stem() += "_landmarks.pb")).string();
+            if (!is_regular_file(landmarksPath))
+                throw error("Couldn't find landmarks model or cache file!");
+        }
+        */
+	}
+	catch (const error& e) {
+		cout << "Error while parsing command-line arguments: " << e.what() << endl;
+		cout << "Use --help to display a list of options." << endl;
+		exit(1);
+	}
 
-    void Editor::setupBl()
-    {
-        // Initialize state machine
-        sm.initiate();
+	//try
+	{
+        Q_INIT_RESOURCE(fvs_editor);
 
-        // Connect actions
-        connect(actionOpen, &QAction::triggered, this, &Editor::open);
-        connect(actionClose, &QAction::triggered, this, &Editor::close);
-        connect(actionPlay, &QAction::triggered, this, &Editor::playPause);
-        connect(actionBackward, &QAction::triggered, this, &Editor::backward);
-        connect(actionForward, &QAction::triggered, this, &Editor::forward);
-        connect(frame_slider, SIGNAL(valueChanged(int)), this, SLOT(frameSliderChanged(int)));
-        connect(actionContours, SIGNAL(toggled(bool)), this, SLOT(toggleRenderParams(bool)));
-        connect(actionBorders, SIGNAL(toggled(bool)), this, SLOT(toggleRenderParams(bool)));
-        connect(actionSegmentation, SIGNAL(toggled(bool)), this, SLOT(toggleRenderParams(bool)));
-        connect(actionPostprocessing, SIGNAL(toggled(bool)), this, SLOT(toggleRenderParams(bool)));
+        QApplication app(argc, argv);
+        fvs::Editor editor(fvsPath, outputDir, videoPath, segPath, landmarksPath, debug > 0);
+        editor.show();
+        return app.exec();
+	}
+    /*
+	catch (std::exception& e)
+	{
+		cerr << e.what() << endl;
+		return 1;
+	}*/
 
-        play_pause_btn->setDefaultAction(actionPlay);
-        backward_btn->setDefaultAction(actionBackward);
-        forward_btn->setDefaultAction(actionForward);
-        keyframe_btn->setDefaultAction(actionKeyframe);
-
-        // Add scroll bar to toolbar
-        QSlider* alpha_slider = new QSlider(Qt::Horizontal, this);
-        alpha_slider->setMinimum(0);
-        alpha_slider->setMaximum(100);
-        alpha_slider->setValue(25);
-        //m_alpha = alpha_slider->value() / 100.0f;
-        alpha_slider->setMaximumWidth(64);
-        alpha_slider->setStatusTip("Segmentation Opacity");
-        //alpha_slider->setFocusPolicy(Qt::NoFocus);
-        //connect(alpha_slider, SIGNAL(valueChanged(int)), this, SLOT(alphaChanged(int)));
-        viewToolBar->insertWidget(actionPostprocessing, alpha_slider);
-
-        // Add smooth iterations
-        QPixmap iterationsPixmap(":/images/iterations.png");
-        QLabel* smooth_iterations_label = new QLabel(this);
-        smooth_iterations_label->setPixmap(iterationsPixmap);
-        postToolBar->addWidget(smooth_iterations_label);
-        smooth_iterations_spinbox = new QSpinBox(this);
-        smooth_iterations_spinbox->setMinimum(1);
-        smooth_iterations_spinbox->setMaximum(10);
-        smooth_iterations_spinbox->setStatusTip("Smooth iterations");
-        //smooth_iterations_spinbox->setFocusPolicy(Qt::NoFocus);
-        connect(smooth_iterations_spinbox, SIGNAL(valueChanged(int)), this, SLOT(smoothIterationsChanged(int)));
-        postToolBar->addWidget(smooth_iterations_spinbox);
-        postToolBar->addSeparator();
-
-        // Add smooth kernel radius
-        QPixmap radiusPixmap(":/images/radius.png");
-        QLabel* smooth_kernel_radius_label = new QLabel(this);
-        smooth_kernel_radius_label->setPixmap(radiusPixmap);
-        postToolBar->addWidget(smooth_kernel_radius_label);
-        smooth_kernel_radius_spinbox = new QSpinBox(this);
-        smooth_kernel_radius_spinbox->setMinimum(1);
-        smooth_kernel_radius_spinbox->setMaximum(10);
-        smooth_kernel_radius_spinbox->setValue(2);
-        smooth_kernel_radius_spinbox->setStatusTip("Smooth kernel radius");
-        //smooth_kernel_radius_spinbox->setFocusPolicy(Qt::NoFocus);
-        connect(smooth_kernel_radius_spinbox, SIGNAL(valueChanged(int)), this, SLOT(smoothKernelRadiusChanged(int)));
-        postToolBar->addWidget(smooth_kernel_radius_spinbox);
-
-        // Adjust window size
-        adjustSize();
-    }
-
-    void Editor::setInputPath(const std::string & input_path)
-    {
-        if (path(input_path).extension() == ".lms")
-            initLandmarks(input_path);
-        else initVideoSource(input_path);
-    }
-
-    void Editor::initLandmarks(const std::string & _landmarks_path)
-    {
-    }
-
-    void Editor::initVideoSource(const std::string & _sequence_path)
-    {
-    }
-
-    void Editor::resizeEvent(QResizeEvent* event)
-    {
-        QMainWindow::resizeEvent(event);
-
-        QSize displaySize = display->size();
-        render_frame = cv::Mat::zeros(displaySize.height(), displaySize.width(), CV_8UC3);
-
-        // Make Qt image.
-        render_image.reset(new QImage((const uint8_t*)render_frame.data,
-            render_frame.cols,
-            render_frame.rows,
-            render_frame.step[0],
-            QImage::Format_RGB888));
-
-        sm.process_event(EvUpdate());
-    }
-
-    void Editor::timerEvent(QTimerEvent *event)
-    {
-        sm.process_event(EvTimerTick());
-    }
-
-    void Editor::open()
-    {
-        QString file = QFileDialog::getOpenFileName(
-            this,
-            "Select one or more files to open",
-            QString(),
-            "Landmarks (*.lms);;Videos (*.mp4 *.mkv *.avi *wmv);;All files (*.*)",
-            nullptr);
-        setInputPath(file.toStdString());
-    }
-
-    void Editor::close()
-    {
-        QMainWindow::close();
-    }
-
-    void Editor::playPause()
-    {
-        sm.process_event(EvPlayPause());
-    }
-
-    void Editor::backward()
-    {
-        sm.process_event(EvSeek(curr_frame_pos - 1));
-    }
-
-    void Editor::forward()
-    {
-        sm.process_event(EvSeek(curr_frame_pos + 1));
-    }
-
-    void Editor::frameSliderChanged(int i)
-    {
-        sm.process_event(EvSeek(i));
-    }
-
-    void Editor::toggleRenderParams(bool toggled)
-    {
-        sm.process_event(EvUpdate());
-    }
-
-    void Editor::render()
-    {
-    }
-
-}   // namespace fvs
-
+	return 0;
+}

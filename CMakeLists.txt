@@ -16,6 +16,10 @@ else()
 	 SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DNOMINMAX")
 endif()
 
+# Optional 3rd party components
+# ===================================================
+option(WITH_BOOST_STATIC "Boost static libraries" ON)
+
 # Build components
 # ===================================================
 option(BUILD_DOCS "Build documentation using Doxygen" ON)
@@ -24,18 +28,16 @@ option(BUILD_INTERFACE_MATLAB "Build interface for Matlab" ON)
 # Find dependencies
 # ===================================================
 # Boost
-if(MSVC)
-	set(Boost_USE_STATIC_LIBS ON)	# only find static libs
-endif(MSVC)
-set(Boost_USE_MULTITHREADED ON)
-find_package( Boost REQUIRED program_options filesystem)
-if(Boost_FOUND)
-	include_directories(${Boost_INCLUDE_DIRS})
-	if(MSVC)
-		# On Windows the Boost libraries are automatically linked
-		link_directories(${Boost_LIBRARY_DIRS})
-	endif(MSVC)	
+set(Boost_USE_STATIC_LIBS ${WITH_BOOST_STATIC})
+set(BOOST_ALL_DYN_LINK NOT ${WITH_BOOST_STATIC})
+if(WIN32)
+	if(${WITH_BOOST_STATIC})
+		add_definitions(-DBOOST_ALL_NO_LIB)
+	else()
+		add_definitions(-DBOOST_ALL_DYN_LINK)
+	endif()
 endif()
+find_package(Boost REQUIRED filesystem program_options)
 
 find_package(OpenCV REQUIRED highgui imgproc imgcodecs)
 find_package(dlib REQUIRED)

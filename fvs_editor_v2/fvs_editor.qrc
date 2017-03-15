@@ -3,6 +3,9 @@
     <file>images/new.png</file>
     <file>images/open.png</file>
     <file>images/save.png</file>
+    <file>images/save-as.png</file>
+    <file>images/close.png</file>
+    <file>images/exit.png</file>
     <file>images/contours.png</file>
     <file>images/borders.png</file>
     <file>images/segmentation.png</file>
@@ -12,5 +15,12 @@
     <file>images/postprocess_smooth.png</file>
     <file>images/iterations.png</file>
     <file>images/radius.png</file>
+    <file>images/face.png</file>
+    <file>images/backward.png</file>
+    <file>images/forward.png</file>
+    <file>images/pause.png</file>
+    <file>images/play.png</file>
+    <file>images/key.png</file>
+    <file>images/hierarchy.png</file>
 </qresource>
 </RCC>
