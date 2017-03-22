@@ -43,6 +43,8 @@ namespace segmentation {
 		float output_scale = 1.0f;
 	};
 
+    /** @brief Writes video frames from stream to file.
+    */
 	class VideoWriterUnit2 : public video_framework::VideoUnit {
 	public:
 	public:

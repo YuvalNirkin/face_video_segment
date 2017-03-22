@@ -46,18 +46,38 @@
 
 namespace fvs {
 
+    /** @brief Classifies segmented regions into face region types.
+    The face region types are:
+    - Empty - The Region does not participate in the face segmentation.
+    - Full - The entire region is taken as part of the face segmentation.
+    - Intersection - Only the intersection of the region with the face's
+    contours is taken as part of the face segmentation.
+    */
     class FaceRegions
     {
     public:
+        /** @brief Constructor.
+        */
         FaceRegions();
 
+        /** @brief Add a new frame.
+        @param[in] seg_desc Segmentation descriptor.
+        @param[in] sfl_frame Landmarks frame.
+        @param[in,out] fvs_frame Regions frame.
+        */
         void addFrame(const segmentation::SegmentationDesc& seg_desc, 
             const sfl::Frame& sfl_frame, Frame& fvs_frame);
 
     private:
+        /** @brief Add a new face.
+        @param[in] sfl_face Landmarks face.
+        @param[in,out] fvs_frame Regions frame.
+        */
         void addFace(const segmentation::SegmentationDesc& seg_desc,
             const sfl::Face& sfl_face, Frame& fvs_frame);
 
+        /** @brief Fill the inside face contours to create a face mask.
+        */
         cv::Mat createFaceMap(const cv::Size& size, const std::vector<cv::Point>& landmarks);
 
         // Holds the segmentation for the current chunk.

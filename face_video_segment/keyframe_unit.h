@@ -37,7 +37,8 @@
 
 namespace fvs {
 
-    struct KeyframeDetectionOptions {
+    struct KeyframeDetectionOptions
+    {
         std::string video_stream_name = "VideoStream";
         std::string segment_stream_name = "SegmentationStream";
         std::string landmarks_stream_name = "LandmarksStream";
@@ -47,8 +48,10 @@ namespace fvs {
         bool debug = false;
     };
 
-    class KeyframeDetectionUnit : public video_framework::VideoUnit {
-    public:
+    /** @brief Detects key frames from stream.
+    */
+    class KeyframeDetectionUnit : public video_framework::VideoUnit
+    {
     public:
         KeyframeDetectionUnit(const KeyframeDetectionOptions& options);
         ~KeyframeDetectionUnit();
@@ -73,7 +76,8 @@ namespace fvs {
         std::unique_ptr<Keyframer> keyframer_;
     };
 
-	struct KeyframeWriterOptions {
+	struct KeyframeWriterOptions
+    {
 		std::string video_stream_name = "VideoStream";
 		std::string segment_stream_name = "SegmentationStream";
 		std::string landmarks_stream_name = "LandmarksStream";
@@ -83,8 +87,10 @@ namespace fvs {
         bool debug = false;
 	};
 
-	class KeyframeWriterUnit : public video_framework::VideoUnit {
-	public:
+    /** @brief Writes keyframe from stream to file.
+    */
+	class KeyframeWriterUnit : public video_framework::VideoUnit
+    {
 	public:
 		KeyframeWriterUnit(const KeyframeWriterOptions& options,
 			const std::string& output_dir, const std::string& src_name);

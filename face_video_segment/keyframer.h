@@ -42,14 +42,20 @@
 
 namespace fvs {
 
+    /** @brief Divides a sequence of frames containing faces into keyframes.
+    Each keyframe is associated with it's corresponding face orientation.
+    A new frame will only become a keyframe if the euclidean distance between
+    it's face orientation (in euler angles) to the orientation of any other keyframe
+    is large enough.
+    */
     class Keyframer
     {
     public:
 
         struct Keyframe
         {
-            int id;
-            cv::Point3f euler_angles;
+            int id; ///< Frame sequence id.
+            cv::Point3f euler_angles;   ///< Face orientation in euler angles.
         };
 
         struct FaceData
@@ -59,12 +65,24 @@ namespace fvs {
             int frame_updated_ind;
         };
 
+        /** @brief Constructor.
+        @param[in] start_frame The frame index to start adding keyframes from.
+        @param[in] stability_range Specify how many frames in a row must have
+        landmarks before a new keyframe can be added.
+        */
         Keyframer(int start_frame = 10, int stability_range = 5);
 
+        /** @brief Add a new frame.
+        @param[in] sfl_frame Landmarks frame.
+        @param[in,out] fvs_frame Regions frame.
+        */
         void addFrame(const sfl::Frame& sfl_frame, Frame& fvs_frame);
 
     private:
-
+        /** @brief Add a new face.
+        @param[in] sfl_face Landmarks face.
+        @param[in,out] fvs_frame Regions frame.
+        */
         bool addFace(const sfl::Face& sfl_face, Face& fvs_face);
 
     private:

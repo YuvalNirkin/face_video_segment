@@ -9,12 +9,17 @@ set(FACE_VIDEO_SEGMENT_VERSION ${FACE_VIDEO_SEGMENT_MAJOR_VERSION}.${FACE_VIDEO_
 
 # Global configurations
 # ===================================================
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake")
-if(UNIX)
-    SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+if(WIN32)
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DNOMINMAX")
+	set(DEF_INSTALL_CMAKE_DIR cmake)
 else()
-	 SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DNOMINMAX")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+	set(DEF_INSTALL_CMAKE_DIR lib/cmake/nirkin_face)
 endif()
+set(INSTALL_CMAKE_DIR ${DEF_INSTALL_CMAKE_DIR} CACHE PATH
+	"Installation directory for CMake files")
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake")
+set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 # Optional 3rd party components
 # ===================================================
@@ -47,11 +52,12 @@ find_package(Qt5Widgets REQUIRED)
 find_package(video_segment REQUIRED)
 find_package(find_face_landmarks REQUIRED)
 
+# Doxygen
+find_package(Doxygen)
+
 # Process subdirectories
 # ===================================================
-
 add_subdirectory(face_video_segment)
-add_subdirectory(fvs_local)
 add_subdirectory(fvs_find_regions)
 add_subdirectory(fvs_segment)
 add_subdirectory(fvs_write_keyframes)
@@ -60,6 +66,11 @@ add_subdirectory(fvs_editor)
 # interfaces
 if(BUILD_INTERFACE_MATLAB)
 	add_subdirectory(interfaces/matlab)
+endif()
+
+# Documentation
+if(BUILD_DOCS)
+	add_subdirectory(doc)
 endif()
 
 # Export configuration

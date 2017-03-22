@@ -64,6 +64,8 @@ struct VideoReader2Options {
   int downscale_size = 0;
 };
 
+/** @brief Reads video frames from file into stream.
+*/
 class VideoReaderUnit2 : public video_framework::VideoUnit {
  public:
      VideoReaderUnit2(const VideoReader2Options& options,

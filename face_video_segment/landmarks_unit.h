@@ -45,6 +45,8 @@ namespace segmentation {
         sfl::FaceTrackingType tracking = sfl::TRACKING_BRISK;
 	};
 
+    /** @brief Calculates face landmarks in video frames from stream.
+    */
 	class LandmarksUnit : public video_framework::VideoUnit {
 	public:
 		LandmarksUnit(const LandmarksOptions& options);
@@ -68,19 +70,14 @@ namespace segmentation {
 		int main_face_id_;
 	};
 
-	/*
-	class LandmarksUnit : public video_framework::VideoUnit {
-	public:
-		static std::shared_ptr<LandmarksUnit> create(const LandmarksOptions& options);
-	};
-	*/
-
 	struct LandmarksRendererOptions {
 		//std::string stream_name = "LandmarksRendererStream";
 		std::string video_stream_name = "VideoStream";
 		std::string landmarks_stream_name = "LandmarksStream";
 	};
 
+    /** @brief Renders face landmarks from stream.
+    */
 	class LandmarksRendererUnit : public video_framework::VideoUnit
 	{
 	public:
