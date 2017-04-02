@@ -86,7 +86,7 @@ namespace fvs
     class Frame;
     class Face;
     class Region;
-    enum PolygonType;
+    //enum PolygonType;
     class Keyframer;
 
 	class Editor : public QMainWindow

@@ -39,6 +39,8 @@
 
 #include <boost/format.hpp>
 
+#include <memory>//
+
 using namespace video_framework;
 
 namespace fvs
@@ -46,8 +48,10 @@ namespace fvs
     KeyframeDetectionUnit::KeyframeDetectionUnit(const KeyframeDetectionOptions& options)
         : options_(options)
     {
-        keyframer_ = std::make_unique<Keyframer>(
-            options.start_frame, options.stability_range);
+        // keyframer_ = std::make_unique<Keyframer>(
+        //     options.start_frame, options.stability_range);
+        keyframer_ = std::unique_ptr<Keyframer>(new Keyframer(
+            options.start_frame, options.stability_range));
     }
 
     KeyframeDetectionUnit::~KeyframeDetectionUnit() {

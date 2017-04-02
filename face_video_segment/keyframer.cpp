@@ -49,7 +49,7 @@ namespace fvs
         for (auto& sfl_face : sfl_frame.faces)
         {
             // Check to find a corresponding fvs face
-            auto& fvs_face = fvs_face_map.find(sfl_face->id);
+            auto fvs_face = fvs_face_map.find(sfl_face->id);
             if (fvs_face == fvs_face_map.end()) continue;
 
             addFace(*sfl_face, fvs_face->second);

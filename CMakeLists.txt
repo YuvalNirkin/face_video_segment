@@ -13,8 +13,9 @@ if(WIN32)
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DNOMINMAX")
 	set(DEF_INSTALL_CMAKE_DIR cmake)
 else()
-	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
-	set(DEF_INSTALL_CMAKE_DIR lib/cmake/nirkin_face)
+	#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14")
+	set(DEF_INSTALL_CMAKE_DIR lib/cmake/${PROJECT_NAME})
 endif()
 set(INSTALL_CMAKE_DIR ${DEF_INSTALL_CMAKE_DIR} CACHE PATH
 	"Installation directory for CMake files")
@@ -51,6 +52,13 @@ find_package(protobuf REQUIRED)
 find_package(Qt5Widgets REQUIRED)
 find_package(video_segment REQUIRED)
 find_package(find_face_landmarks REQUIRED)
+
+# OpenMP
+find_package(OpenMP)
+if (OPENMP_FOUND)
+    set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
+    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+endif()
 
 # Doxygen
 find_package(Doxygen)

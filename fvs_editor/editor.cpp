@@ -104,7 +104,8 @@ namespace fvs
         m_landmarks_file(landmarks_file)
     {
         // Initialize keyframer
-        m_keyframer = std::make_unique<Keyframer>(10, 5);
+        // m_keyframer = std::make_unique<Keyframer>(10, 5);
+        m_keyframer = std::unique_ptr<Keyframer>(new Keyframer(10, 5));
 
         // Initialize face segmentation
         m_input_regions.reset(new Sequence());
@@ -654,11 +655,11 @@ namespace fvs
                 // Copy regions from input regions
                 const Frame& input_frame = m_input_regions->frames(m_curr_frame_ind);
                 auto& input_face_map = input_frame.faces();
-                auto& input_face = input_face_map.find(m_curr_face_id);
+                auto input_face = input_face_map.find(m_curr_face_id);
                 if (input_face != input_face_map.end())
                 {
                     auto& input_region_map = input_face->second.regions();
-                    auto& input_region = input_region_map.find(id);
+                    auto input_region = input_region_map.find(id);
                     if (input_region != input_region_map.end())
                         edit_region = input_region->second;
                 }
@@ -778,7 +779,7 @@ namespace fvs
         {
             // Find edit face
             auto& edit_face_map = *edit_frame->mutable_faces();
-            auto& edit_face_it = edit_face_map.find(m_curr_face_id);
+            auto edit_face_it = edit_face_map.find(m_curr_face_id);
             if (edit_face_it != edit_face_map.end())
                 edit_face = &edit_face_it->second;
         }
@@ -787,7 +788,7 @@ namespace fvs
         if (nearest_edit_frame != nullptr)
         {
             auto& nearest_edit_face_map = *nearest_edit_frame->mutable_faces();
-            auto& nearest_edit_face_it = nearest_edit_face_map.find(m_curr_face_id);
+            auto nearest_edit_face_it = nearest_edit_face_map.find(m_curr_face_id);
             if (nearest_edit_face_it != nearest_edit_face_map.end())
                 nearest_edit_face = &nearest_edit_face_it->second;
         }
@@ -813,7 +814,7 @@ namespace fvs
                 // For each region
                 for (auto& r : m_seg_desc->region())
                 {
-                    auto& nearest_edit_region = nearest_edit_region_map.find((unsigned int)r.id());
+                    auto nearest_edit_region = nearest_edit_region_map.find((unsigned int)r.id());
                     if (nearest_edit_region == nearest_edit_region_map.end()) continue;
 
                     // Count each polygon
@@ -963,7 +964,7 @@ namespace fvs
             return nullptr;
 
         auto& edit_face_map = *edit_frame->mutable_faces();
-        auto& edit_face = edit_face_map.find(face_id);
+        auto edit_face = edit_face_map.find(face_id);
         if (edit_face == edit_face_map.end()) return nullptr;
         return &edit_face->second;
     }
@@ -974,7 +975,7 @@ namespace fvs
         if(frame == nullptr) return nullptr;
 
         auto& face_map = *frame->mutable_faces();
-        auto& face = face_map.find(face_id);
+        auto face = face_map.find(face_id);
         if (face == face_map.end()) return nullptr;
         return &face->second;
     }
@@ -983,14 +984,14 @@ namespace fvs
         google::protobuf::Map<unsigned int, Region>& region_map)
     {
         auto& input_face_map = m_input_regions->frames(frame_id).faces();
-        auto& input_face = input_face_map.find(face_id);
+        auto input_face = input_face_map.find(face_id);
         if (input_face != input_face_map.end())
             region_map = input_face->second.regions();
 
         Frame* edit_frame = getNearestEditedFrame(frame_id);
         if (edit_frame == nullptr) return;
         auto& edit_face_map = *edit_frame->mutable_faces();
-        auto& edit_face = edit_face_map.find(face_id);
+        auto edit_face = edit_face_map.find(face_id);
         if (edit_face == edit_face_map.end()) return;
         auto& edit_region_map = edit_face->second.regions();
 
@@ -1008,7 +1009,7 @@ namespace fvs
             for (const auto& r : m_seg_desc->region())
             {
                 if (r.vectorization().polygon().empty()) continue;
-                auto& edit_region = edit_region_map.find((unsigned int)r.id());
+                auto edit_region = edit_region_map.find((unsigned int)r.id());
                 if (edit_region == edit_region_map.end()) continue;
                 if (edit_region->second.polygons_size() == 0) continue;
 
@@ -1076,7 +1077,7 @@ namespace fvs
     {
         const Frame& frame = m_input_regions->frames(frame_id);
         auto& face_map = frame.faces();
-        auto& face = face_map.find(face_id);
+        auto face = face_map.find(face_id);
         if (face == face_map.end()) return false;
         return face->second.keyframe();
     }
@@ -1217,7 +1218,7 @@ namespace fvs
         for (int i = m_curr_frame_ind - 1; i >= 0; --i)
         {
             auto& face_map = m_input_regions->frames(i).faces();
-            auto& face = face_map.find(m_curr_face_id);
+            auto face = face_map.find(m_curr_face_id);
             if (face == face_map.end()) continue;
             if (face->second.keyframe())
             {
@@ -1232,7 +1233,7 @@ namespace fvs
             const Frame& edit_frame = m_edited_regions->frames(i);
             if (edit_frame.id() >= m_curr_frame_ind) continue;
             auto& face_map = edit_frame.faces();
-            auto& face = face_map.find(m_curr_face_id);
+            auto face = face_map.find(m_curr_face_id);
             if (face == face_map.end()) continue;
             if (face->second.keyframe())
             {
@@ -1253,7 +1254,7 @@ namespace fvs
         for (int i = m_curr_frame_ind + 1; i < m_total_frames; ++i)
         {
             auto& face_map = m_input_regions->frames(i).faces();
-            auto& face = face_map.find(m_curr_face_id);
+            auto face = face_map.find(m_curr_face_id);
             if (face == face_map.end()) continue;
             if (face->second.keyframe())
             {
@@ -1267,7 +1268,7 @@ namespace fvs
         {
             if (edit_frame.id() <= m_curr_frame_ind) continue;
             auto& face_map = edit_frame.faces();
-            auto& face = face_map.find(m_curr_face_id);
+            auto face = face_map.find(m_curr_face_id);
             if (face == face_map.end()) continue;
             if (face->second.keyframe())
             {

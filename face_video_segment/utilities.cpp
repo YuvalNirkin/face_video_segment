@@ -48,7 +48,7 @@ namespace fvs
         for (const auto& r : seg_desc.region())
         {
             if (r.vectorization().polygon().empty()) continue;
-            auto& face_region = regions.find((unsigned int)r.id());
+            auto face_region = regions.find((unsigned int)r.id());
             if (face_region == regions.end()) continue;
 
             // Find holes
