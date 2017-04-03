@@ -1,6 +1,27 @@
 function face_video_seg_batch(varargin)
-%FACE_VIDEO_SEG_BATCH Summary of this function goes here
-%   Detailed explanation goes here
+%FACE_VIDEO_SEG_BATCH Face Video Segmentation automatic pipeline.
+%   Input:
+%   inDir - Path to input video directory
+%   outDir - Path to output directory
+%   landmarks - Path to the landmarks model file
+%
+%   Optional:
+%   indices (=[]) - Video indices to process
+%   minWidth (=0) - The minimum width of videos to process
+%   minHeight (=0) - The minimum height of videos to process
+%   maxScaleWidth (=0) - The maximum width scale to detect faces
+%   maxScaleHeight (=0) - The maximum height scale to detect faces
+%   track (=2) - Tracker type [0=NONE|1=BRISK|2=LBP]
+%   verbose (=0) - output debug information level (0 means no debug)
+%
+%   Output:
+%   The output directory will contain 4 directories:
+%   seg_trees - Containing the all the video segmentations hierarchies
+%   for each video.
+%   landmarks - Containing all the landmarks for each video.
+%   fvs_files - Containing all the classified regions for each video.
+%   output - Containing all the keyframe images and segmentations for
+%   each video in a separate directory.
 
 %% Parse input arguments
 p = inputParser;
@@ -34,8 +55,6 @@ end
 %% Parse input directory
 filt = '.*(avi|mp4|mkv)';
 fileDescs = dir(p.Results.inDir);
-%fileNames = {fileDescs.name};
-%fileNames = {fileDescs(~cellfun(@isempty,regexpi({fileDescs.name},filt))).name};
 fileNames = {fileDescs(~cellfun(@is_video,{fileDescs.name})).name};
 if(isempty(indices))
     indices = 1:length(fileNames);

@@ -1,5 +1,5 @@
 /** @file
-@brief Sequence face landmarks utility functions.
+@brief Face video segmentation utility functions.
 */
 
 #ifndef __FVG_UTILITIES__
@@ -31,11 +31,11 @@ namespace fvs
 
     /** Render the boundaries of the segmentation regions.
         @param img The image that boundaries will be rendered on.
-        @hierarchy_level The level of the hierarchy.
+        @param hierarchy_level The level of the hierarchy.
         0 denotes the over-segmentation. >= 1 : denotes a hierarchical level.
-        @desc The segmentation descriptor which contains the segmentations data.
-        @seg_hier The hierarchy information.
-        @color Boundaries color.
+        @param desc The segmentation descriptor which contains the segmentations data.
+        @param seg_hier The hierarchy information.
+        @param color Boundaries color.
     */
     void renderBoundaries(cv::Mat& img, int hierarchy_level,
         const segmentation::SegmentationDesc& desc,
@@ -46,12 +46,12 @@ namespace fvs
 
     /** Render segmentation blended with image
     @param img The image that the segmentation will be blended with.
-    @seg The segmentation as an 8-bit image.
+    @param seg The segmentation as an 8-bit image.
     Values of 255 denote full regions and values of 128 denote intersection regions.
-    @alpha Blending weight [0, 1].
+    @param alpha Blending weight [0, 1].
     0 means completely transparent and 1 means completely opaque.
-    @full_color The color to be used for full regions.
-    @intersection_color The color to be used for intersection regions.
+    @param full_color The color to be used for full regions.
+    @param intersection_color The color to be used for intersection regions.
     */
     void renderSegmentationBlend(cv::Mat& img, const cv::Mat& seg, float alpha = 0.5f,
         const cv::Scalar& full_color = cv::Scalar(0, 0, 255),

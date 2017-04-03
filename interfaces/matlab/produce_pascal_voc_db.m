@@ -1,6 +1,17 @@
 function produce_pascal_voc_db(varargin)
-%PRODUCE_PASCAL_VOC_DB Summary of this function goes here
-%   Detailed explanation goes here
+%PRODUCE_PASCAL_VOC_DB Convert the generated ground truth to a dataset in
+%PASCAL VOC format.
+%   Input:
+%   inDir - Path to genrated ground truth directory
+%   outDir - Path to output directory
+%
+%   Optional:
+%   indices (=[]) - Video indices to process
+%   max_scale (=0) - The maximum allowed image resolution [pixels]
+%   upscale (=0) - Upscale all images to max_scale resolution
+%   copyImages (=1) - Toggle whether to copy the images to the dataset. If
+%   disabled then only the meta-data will be written. This is useful to
+%   quickly change selected images for training and valuation
 
 %% Parse input arguments
 p = inputParser;
