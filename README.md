@@ -25,5 +25,48 @@ This project contains a collection of tools for semi-supervised gathering of gro
 - Download the [landmarks model file](http://dlib.net/files/shape_predictor_68_face_landmarks.dat.bz2).
 
 ## Usage
+For using the library's C++ interface, please take a look at the [Doxygen generated documentation](https://yuvalnirkin.github.io/face_video_segment/).
+
+Before running the pipeline please prepare an input directory with all the face videos for processing, and an output directory that will contain all the experiment data.
+To execute the entire automatic pipeline use the following Matlab code:
+```Matlab
+inDir = 'videos'; % Input videos directory
+outDir = 'fvs_expr'; % Output directory
+landmarksFile = 'shape_predictor_68_face_landmarks.dat';  % Landmarks model file
+face_video_seg_batch(inDir, outDir, landmarksFile);
+```
+
+Now we have 4 directories in "fvs_expr":
+- seg_trees - Containing the all the video segmentations hierarchies for each video.
+- landmarks - Containing all the landmarks for each video.
+- fvs_files - Containing all the classified regions for each video.
+- output - Containing all the keyframe images and segmentations for each video in a separate directory.
+
+For additional manual processing go to the "fvs_files" directory and edit the appropiate file with the fvs_editor.
+```DOS .bat
+fvs_editor video_name.fvs
+```
+On Windows you can right click the .fvs file, select open with... and point to the fvs_editor.
+
+To regenerate the output images and segmentations you can either use fvs_write_keyframes.m:
+```Matlab
+fvsFile = 'fvs_expr/fvs_files/video_name.fvs'; % Edited fvs file
+outDir = 'fvs_expr/output/video_name'; % Output directory for the specific video
+face_video_seg_batch(fvsFile, outDir);
+```
+Or you can delete the corresponding video directories in "fvs_expr/output" and re-run the automatic pipeline (existing files will not be overwritten).
+
+To convert the generated ground truth to a dataset in PASCAL VOC format, do the following:
+Create an empty trainval.csv file:
+```Matlab
+fvs_init_trainval('fvs_expr/output', 'fvs_expr/output/trainval.csv');
+```
+Fill the "target" column in the trainval.csv file with "train" for training, "val" for valuation, or leave empty for ignoring the video.
+Then to produce the dataset:
+```Matlab
+produce_pascal_voc_db('fvs_expr/output', 'fvs_expr/pascal_voc_db');
+```
+Use "add_pascal_voc_db.m" to add additional images and segmentations to the dataset.
 
 ## Bibliography
+[1] Grundmann, Matthias and Kwatra, Vivek and Han, Mei and Essa, Irfan, [Efficient hierarchical graph-based video segmentation](https://smartech.gatech.edu/bitstream/handle/1853/38305/cvpr2010_videosegmentation.pdf), In Computer Vision and Pattern Recognition (CVPR), 2010 IEEE Conference on, pp. 2141-2148. IEEE, 2010.
