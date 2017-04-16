@@ -36,7 +36,7 @@
 
 using namespace video_framework;
 
-namespace segmentation
+namespace fvs
 {
 	VideoWriterUnit2::VideoWriterUnit2(const VideoWriter2Options& options,
 		const std::string& video_file)
@@ -49,7 +49,7 @@ namespace segmentation
 
 	bool VideoWriterUnit2::OpenStreams(StreamSet* set) {
 		// Find video stream idx.
-		video_stream_idx_ = FindStreamIdx(options_.video_stream_name, set);
+		video_stream_idx_ = FindStreamIdx(options_.stream_name, set);
 
 		if (video_stream_idx_ < 0) {
 			LOG(ERROR) << "Could not find Video stream!\n";

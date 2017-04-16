@@ -34,13 +34,34 @@
 
 #include <opencv2/videoio.hpp>
 
-namespace segmentation {
+namespace fvs 
+{
 
 	struct VideoWriter2Options {
-		std::string video_stream_name = "VideoStream";
-		std::string segment_stream_name = "SegmentationStream";
-		std::string landmarks_model_file = "";
-		float output_scale = 1.0f;
+		// Codec settings.
+		// Bit-rate default is 2000 kbps
+		int bit_rate = 2000000;
+
+		// Use video streams fps as default.
+		// TODO: will be ignored, fix!
+		float fps = 0;
+
+		// Scale factor of output. Overrides all other scale settings.
+		float scale = 1.0f;
+
+		// width and height will be rounded to multiple of fraction.
+		int fraction = 4;
+
+		// If > 0, maximum dimension is scaled to fit that value. Can not both be set.
+		int scale_max_dim = 0;
+		int scale_min_dim = 0;
+
+		// Guess format from format std::string as default.
+		// Call "ffmpeg -formats" to get a std::list of valid formats.
+		std::string output_format;
+
+		// Output stream name.
+		std::string stream_name = "VideoStream";
 	};
 
     /** @brief Writes video frames from stream to file.

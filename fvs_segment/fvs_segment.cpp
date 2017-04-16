@@ -29,6 +29,7 @@
 #include "base/base.h"
 #include "base/base_impl.h"
 #include "video_reader_unit2.h"
+#include "video_writer_unit2.h"
 
 #include <iostream>
 #include <string>
@@ -59,26 +60,26 @@
 /*
 DEFINE_bool(flow, true, "Determine if optical flow should be computed.");
 DEFINE_string(input_file, "", "The input video file to segment. Use 'CAMERA' to read "
-                              "from input camera. Adopt chunk_size and chunk_set_size "
-                              "in that case to smaller values.");
+							  "from input camera. Adopt chunk_size and chunk_set_size "
+							  "in that case to smaller values.");
 DEFINE_bool(use_pipeline, true, "If set processing will be done in parallel as pipeline");
 DEFINE_bool(pipeline_status, false, "If set outputs pipeline status");
 DEFINE_bool(over_segment, false, "If set only dense segmentation will be performed.");
 DEFINE_double(display, -1, "If set >=0 displays segmentation at the specified level "
-                           "to stream.");
+						   "to stream.");
 
 DEFINE_bool(render_and_save, false, "If set renders the resulting segmentation "
-                                    "at levels 0.75, 0.4 and 0.1.");
+									"at levels 0.75, 0.4 and 0.1.");
 DEFINE_bool(write_to_file, false, "If set write segmentation result to specified "
-                                  "input_file + .pb");
+								  "input_file + .pb");
 DEFINE_bool(logging, false, "If set output various logging information.");
 DEFINE_bool(save_flow, false, "If set, buffers flow to file if it does not exist.");
 DEFINE_bool(display_flow, false, "If set, buffers flow to file if it does not exist.");
 DEFINE_bool(run_on_server, false, "If set uses special settings for server processing. "
-                                  "Note: This will override some settings!");
+								  "Note: This will override some settings!");
 DEFINE_int32(downscale_min_size, 0, "If set > 0, downsamples input video to specifed "
-                                    "dimension.");
-                                    */
+									"dimension.");
+									*/
 using std::cout;
 using std::endl;
 using std::cerr;
@@ -97,308 +98,320 @@ typedef vf::VideoDisplayUnit DisplayUnit;
 typedef vf::VideoDisplayOptions DisplayUnitOptions;
 #endif  // WITH_QT
 
+#ifdef WITH_OPENCV_VIDEOIO
+typedef fvs::VideoReaderUnit2 SelectedVideoReaderUnit;
+typedef fvs::VideoReader2Options SelectedVideoReaderOptions;
+typedef fvs::VideoWriterUnit2 SelectedVideoWriterUnit;
+typedef fvs::VideoWriter2Options SelectedVideoWriterOptions;
+#else
+typedef vf::VideoReaderUnit SelectedVideoReaderUnit;
+typedef vf::VideoReaderOptions SelectedVideoReaderOptions;
+typedef vf::VideoWriterUnit SelectedVideoWriterUnit;
+typedef vf::VideoWriterOptions SelectedVideoWriterOptions;
+#endif
+
 int main(int argc, char** argv)
 {
-    // Parse command line arguments
-    string input_path, output_path;
-    double preview, downscale_min_size = 0;
-    bool flow = true, use_pipeline = true, display_flow = false, save_flow = false,
-        over_segment = false, run_on_server = false, render_and_save = false,
-        write_to_file = true, pipeline_status = false;
-    try {
-        options_description desc("Allowed options");
-        desc.add_options()
-            ("help", "display the help message")
-            ("input,i", value<string>(&input_path)->required(), "path to video file")
-            ("output,o", value<string>(&output_path), "output segmentation file (.pb)")
-            ("preview,p", value<double>(&preview)->default_value(-1.0), 
-                "If set >=0 displays segmentation at the specified level to stream")
-            ;
-        variables_map vm;
-        store(command_line_parser(argc, argv).options(desc).
-            positional(positional_options_description().add("input", -1)).run(), vm);
-        if (vm.count("help")) {
-            cout << "Usage: fvs_segment [options]" << endl;
-            cout << desc << endl;
-            exit(0);
-        }
-        notify(vm);
+	// Parse command line arguments
+	string input_path, output_path;
+	double preview, downscale_min_size = 0;
+	bool flow = true, use_pipeline = true, display_flow = false, save_flow = false,
+		over_segment = false, run_on_server = false, render_and_save = false,
+		write_to_file = true, pipeline_status = false;
+	try {
+		options_description desc("Allowed options");
+		desc.add_options()
+			("help", "display the help message")
+			("input,i", value<string>(&input_path)->required(), "path to video file")
+			("output,o", value<string>(&output_path), "output segmentation file (.pb)")
+			("preview,p", value<double>(&preview)->default_value(-1.0),
+				"If set >=0 displays segmentation at the specified level to stream")
+			;
+		variables_map vm;
+		store(command_line_parser(argc, argv).options(desc).
+			positional(positional_options_description().add("input", -1)).run(), vm);
+		if (vm.count("help")) {
+			cout << "Usage: fvs_segment [options]" << endl;
+			cout << desc << endl;
+			exit(0);
+		}
+		notify(vm);
 
-        path input = path(input_path);
-        if (output_path.empty())  output_path = input_path + ".pb";
-    }
-    catch (const error& e) {
-        cout << "Error while parsing command-line arguments: " << e.what() << endl;
-        cout << "Use --help to display a list of options." << endl;
-        exit(1);
-    }
+		path input = path(input_path);
+		if (output_path.empty())  output_path = input_path + ".pb";
+	}
+	catch (const error& e) {
+		cout << "Error while parsing command-line arguments: " << e.what() << endl;
+		cout << "Use --help to display a list of options." << endl;
+		exit(1);
+	}
 
-  // Initialize Google's logging library.
-  google::InitGoogleLogging(argv[0]);
+	// Initialize Google's logging library.
+	google::InitGoogleLogging(argv[0]);
 
-  std::vector<std::unique_ptr<vf::VideoPipelineSource>> sources;
-  std::vector<std::unique_ptr<vf::VideoPipelineSink>> sinks;
+	std::vector<std::unique_ptr<vf::VideoPipelineSource>> sources;
+	std::vector<std::unique_ptr<vf::VideoPipelineSink>> sinks;
 
-  // For pipeline stats if requested.
-  std::vector<std::pair<const vf::VideoPipelineSink*, std::string>> named_sinks;
+	// For pipeline stats if requested.
+	std::vector<std::pair<const vf::VideoPipelineSink*, std::string>> named_sinks;
 
-  //std::unique_ptr<vf::VideoReaderUnit> reader;
-  std::unique_ptr<VideoReaderUnit2> reader;
-  std::unique_ptr<vf::VideoCaptureUnit> camera_reader;
-  vf::VideoUnit* root = nullptr;
-  vf::VideoUnit* input = nullptr;  // Updated throughout graph construction.
+	std::unique_ptr<SelectedVideoReaderUnit> reader;
+	std::unique_ptr<vf::VideoCaptureUnit> camera_reader;
+	vf::VideoUnit* root = nullptr;
+	vf::VideoUnit* input = nullptr;  // Updated throughout graph construction.
 
-  // Determine if flow is being used and if it is being read from file.
-  std::string flow_file =
-      input_path.substr(0, input_path.find_last_of(".")) + ".flow";
-  bool use_flow_from_file = false;
-  if (flow) {
-	  use_flow_from_file = boost::filesystem::exists(flow_file);
-    //use_flow_from_file = base::FileExists(flow_file);
-  }
+	// Determine if flow is being used and if it is being read from file.
+	std::string flow_file =
+		input_path.substr(0, input_path.find_last_of(".")) + ".flow";
+	bool use_flow_from_file = false;
+	if (flow) {
+		use_flow_from_file = boost::filesystem::exists(flow_file);
+		//use_flow_from_file = base::FileExists(flow_file);
+	}
 
-  // Setup the actual video units.
-  if (input_path == "CAMERA") {
-    vf::VideoCaptureOptions options;
-    options.downscale = 4.0f;
-    camera_reader.reset(new vf::VideoCaptureUnit(options));
-    root = input = camera_reader.get();
-  } else {
-    //vf::VideoReaderOptions reader_options;
-    VideoReader2Options reader_options;
-    if (downscale_min_size > 0) {
-      reader_options.downscale_size = downscale_min_size;
-      //reader_options.downscale = vf::VideoReaderOptions::DOWNSCALE_TO_MIN_SIZE;
-      reader_options.downscale = VideoReader2Options::DOWNSCALE_TO_MIN_SIZE;
-    }
-    //reader.reset(new vf::VideoReaderUnit(reader_options, input_path));
-    reader.reset(new VideoReaderUnit2(reader_options, input_path));
-    root = input = reader.get();
-  }
+	// Setup the actual video units.
+	if (input_path == "CAMERA") {
+		vf::VideoCaptureOptions options;
+		options.downscale = 4.0f;
+		camera_reader.reset(new vf::VideoCaptureUnit(options));
+		root = input = camera_reader.get();
+	}
+	else {
+		//vf::VideoReaderOptions reader_options;
+		SelectedVideoReaderOptions reader_options;
+		if (downscale_min_size > 0) {
+			reader_options.downscale_size = downscale_min_size;
+			reader_options.downscale = SelectedVideoReaderOptions::DOWNSCALE_TO_MIN_SIZE;
+		}
+		reader.reset(new SelectedVideoReaderUnit(reader_options, input_path));
+		root = input = reader.get();
+	}
 
-  if (use_pipeline) {
-    sinks.emplace_back(new vf::VideoPipelineSink());
-    sinks.back()->AttachTo(input);
-    vf::SourceRatePolicy srp;
-    if (flow && !use_flow_from_file) {
-      // Ensure we are not computing too many flow files.
-      srp.respond_to_limit_rate = true;
-      srp.rate_scale = 1.25f;
-      srp.sink_max_queue_size = 10;
-    }
-    sources.emplace_back(new vf::VideoPipelineSource(sinks.back().get(),
-                                                     nullptr, srp));
-    input = sources.back().get();
-    named_sinks.push_back(std::make_pair(sinks.back().get(), "Input"));
-  }
+	if (use_pipeline) {
+		sinks.emplace_back(new vf::VideoPipelineSink());
+		sinks.back()->AttachTo(input);
+		vf::SourceRatePolicy srp;
+		if (flow && !use_flow_from_file) {
+			// Ensure we are not computing too many flow files.
+			srp.respond_to_limit_rate = true;
+			srp.rate_scale = 1.25f;
+			srp.sink_max_queue_size = 10;
+		}
+		sources.emplace_back(new vf::VideoPipelineSource(sinks.back().get(),
+			nullptr, srp));
+		input = sources.back().get();
+		named_sinks.push_back(std::make_pair(sinks.back().get(), "Input"));
+	}
 
-  std::unique_ptr<vf::LuminanceUnit> lum_unit;
-  std::unique_ptr<vf::DenseFlowUnit> dense_flow_unit;
-  std::unique_ptr<vf::DenseFlowReaderUnit> dense_flow_reader;
+	std::unique_ptr<vf::LuminanceUnit> lum_unit;
+	std::unique_ptr<vf::DenseFlowUnit> dense_flow_unit;
+	std::unique_ptr<vf::DenseFlowReaderUnit> dense_flow_reader;
 
-  if (flow) {
-    if (use_flow_from_file) {
-      dense_flow_reader.reset(
-          new vf::DenseFlowReaderUnit(vf::DenseFlowReaderOptions(), flow_file));
-      dense_flow_reader->AttachTo(input);
-      input = dense_flow_reader.get();
-    } else {
-      lum_unit.reset(new vf::LuminanceUnit(vf::LuminanceOptions()));
-      lum_unit->AttachTo(input);
-      vf::DenseFlowOptions flow_options;
-      flow_options.flow_iterations = 10;
-      flow_options.num_warps = 2;
-      flow_options.video_out_stream_name = display_flow ? "RenderedFlow" : "";
-      if (save_flow) {
-        flow_options.flow_output_file = flow_file;
-      }
-      dense_flow_unit.reset(new vf::DenseFlowUnit(flow_options));
-      dense_flow_unit->AttachTo(lum_unit.get());
-      input = dense_flow_unit.get();
+	if (flow) {
+		if (use_flow_from_file) {
+			dense_flow_reader.reset(
+				new vf::DenseFlowReaderUnit(vf::DenseFlowReaderOptions(), flow_file));
+			dense_flow_reader->AttachTo(input);
+			input = dense_flow_reader.get();
+		}
+		else {
+			lum_unit.reset(new vf::LuminanceUnit(vf::LuminanceOptions()));
+			lum_unit->AttachTo(input);
+			vf::DenseFlowOptions flow_options;
+			flow_options.flow_iterations = 10;
+			flow_options.num_warps = 2;
+			flow_options.video_out_stream_name = display_flow ? "RenderedFlow" : "";
+			if (save_flow) {
+				flow_options.flow_output_file = flow_file;
+			}
+			dense_flow_unit.reset(new vf::DenseFlowUnit(flow_options));
+			dense_flow_unit->AttachTo(lum_unit.get());
+			input = dense_flow_unit.get();
 
-      if (use_pipeline) {
-        sinks.emplace_back(new vf::VideoPipelineSink());
-        sinks.back()->AttachTo(input);
-        sources.back()->SetMonitorSink(sinks.back().get());
-        sources.emplace_back(new vf::VideoPipelineSource(sinks.back().get()));
-        input = sources.back().get();
-        named_sinks.push_back(std::make_pair(sinks.back().get(), "Flow"));
-      }
-    }
-  }
+			if (use_pipeline) {
+				sinks.emplace_back(new vf::VideoPipelineSink());
+				sinks.back()->AttachTo(input);
+				sources.back()->SetMonitorSink(sinks.back().get());
+				sources.emplace_back(new vf::VideoPipelineSource(sinks.back().get()));
+				input = sources.back().get();
+				named_sinks.push_back(std::make_pair(sinks.back().get(), "Flow"));
+			}
+		}
+	}
 
-  seg::DenseSegmentationUnitOptions dense_seg_unit_options;
-  if (!flow) {
-    dense_seg_unit_options.flow_stream_name.clear();
-  }
+	seg::DenseSegmentationUnitOptions dense_seg_unit_options;
+	if (!flow) {
+		dense_seg_unit_options.flow_stream_name.clear();
+	}
 
-  seg::DenseSegmentationOptions dense_seg_options;
-  // Last one creates vectorization.
-  if (over_segment) {
-    dense_seg_options.compute_vectorization = true;
-  }
-  std::unique_ptr<seg::DenseSegmentationUnit> dense_segment(
-      new seg::DenseSegmentationUnit(dense_seg_unit_options, &dense_seg_options));
+	seg::DenseSegmentationOptions dense_seg_options;
+	// Last one creates vectorization.
+	if (over_segment) {
+		dense_seg_options.compute_vectorization = true;
+	}
+	std::unique_ptr<seg::DenseSegmentationUnit> dense_segment(
+		new seg::DenseSegmentationUnit(dense_seg_unit_options, &dense_seg_options));
 
-  dense_segment->AttachTo(input);
-  input = dense_segment.get();
+	dense_segment->AttachTo(input);
+	input = dense_segment.get();
 
-  if (use_pipeline) {
-    sinks.emplace_back(new vf::VideoPipelineSink());
-    sinks.back()->AttachTo(input);
-    sources.emplace_back(new vf::VideoPipelineSource(sinks.back().get()));
-    input = sources.back().get();
-    named_sinks.push_back(std::make_pair(sinks.back().get(), "DenseSeg"));
-  }
+	if (use_pipeline) {
+		sinks.emplace_back(new vf::VideoPipelineSink());
+		sinks.back()->AttachTo(input);
+		sources.emplace_back(new vf::VideoPipelineSource(sinks.back().get()));
+		input = sources.back().get();
+		named_sinks.push_back(std::make_pair(sinks.back().get(), "DenseSeg"));
+	}
 
-  std::unique_ptr<seg::RegionSegmentationUnit> region_segment;
-  if (!over_segment) {
-    seg::RegionSegmentationUnitOptions region_unit_options;
-    if (!flow) {
-      region_unit_options.flow_stream_name.clear();
-    }
-    // Memory preserving run on server.
-    if (run_on_server) {
-      region_unit_options.free_video_frames = true;
-      region_unit_options.free_flow_frames = true;
-    }
+	std::unique_ptr<seg::RegionSegmentationUnit> region_segment;
+	if (!over_segment) {
+		seg::RegionSegmentationUnitOptions region_unit_options;
+		if (!flow) {
+			region_unit_options.flow_stream_name.clear();
+		}
+		// Memory preserving run on server.
+		if (run_on_server) {
+			region_unit_options.free_video_frames = true;
+			region_unit_options.free_flow_frames = true;
+		}
 
-    region_segment.reset(new seg::RegionSegmentationUnit(region_unit_options, nullptr));
-    region_segment->AttachTo(input);
-    input = region_segment.get();
+		region_segment.reset(new seg::RegionSegmentationUnit(region_unit_options, nullptr));
+		region_segment->AttachTo(input);
+		input = region_segment.get();
 
-    if (use_pipeline) {
-      sinks.emplace_back(new vf::VideoPipelineSink());
-      sinks.back()->AttachTo(input);
-      sources.emplace_back(new vf::VideoPipelineSource(sinks.back().get()));
-      input = sources.back().get();
-      named_sinks.push_back(std::make_pair(sinks.back().get(), "HierSeg"));
-    }
-  }
+		if (use_pipeline) {
+			sinks.emplace_back(new vf::VideoPipelineSink());
+			sinks.back()->AttachTo(input);
+			sources.emplace_back(new vf::VideoPipelineSource(sinks.back().get()));
+			input = sources.back().get();
+			named_sinks.push_back(std::make_pair(sinks.back().get(), "HierSeg"));
+		}
+	}
 
-  std::unique_ptr<seg::SegmentationRenderUnit> display_render;
-  std::unique_ptr<DisplayUnit> segment_display;
+	std::unique_ptr<seg::SegmentationRenderUnit> display_render;
+	std::unique_ptr<DisplayUnit> segment_display;
 
-  if (preview >= 0) {
-    seg::SegmentationRenderUnitOptions render_options;
-    render_options.blend_alpha = 0.9;
-    render_options.concat_with_source = true;
-    render_options.hierarchy_level = preview;
+	if (preview >= 0) {
+		seg::SegmentationRenderUnitOptions render_options;
+		render_options.blend_alpha = 0.9;
+		render_options.concat_with_source = true;
+		render_options.hierarchy_level = preview;
 
-    display_render.reset(new seg::SegmentationRenderUnit(render_options));
-    display_render->AttachTo(input);
+		display_render.reset(new seg::SegmentationRenderUnit(render_options));
+		display_render->AttachTo(input);
 
-    DisplayUnitOptions display_options;
-    display_options.stream_name = render_options.out_stream_name;
-    segment_display.reset(new DisplayUnit(display_options));
-    segment_display->AttachTo(display_render.get());
+		DisplayUnitOptions display_options;
+		display_options.stream_name = render_options.out_stream_name;
+		segment_display.reset(new DisplayUnit(display_options));
+		segment_display->AttachTo(display_render.get());
 
-    input = segment_display.get();
-  }
+		input = segment_display.get();
+	}
 
-  std::unique_ptr<DisplayUnit> flow_display;
+	std::unique_ptr<DisplayUnit> flow_display;
 
-  if (display_flow) {
-    DisplayUnitOptions display_options;
-    display_options.stream_name = "RenderedFlow";
-    flow_display.reset(new DisplayUnit(display_options));
-    flow_display->AttachTo(input);
+	if (display_flow) {
+		DisplayUnitOptions display_options;
+		display_options.stream_name = "RenderedFlow";
+		flow_display.reset(new DisplayUnit(display_options));
+		flow_display->AttachTo(input);
 
-    input = flow_display.get();
-  }
-  std::vector<std::unique_ptr<seg::SegmentationRenderUnit>> out_render;
-  std::vector<std::unique_ptr<vf::VideoWriterUnit>> out_writer;
+		input = flow_display.get();
+	}
+	std::vector<std::unique_ptr<seg::SegmentationRenderUnit>> out_render;
+	std::vector<std::unique_ptr<SelectedVideoWriterUnit>> out_writer;
 
-  if (render_and_save) {
-    vector<float> out_levels{0.1f, 0.4f, 0.75f};
-    int idx = 0;
-    for (float level : out_levels) {
-      seg::SegmentationRenderUnitOptions render_options;
-      render_options.blend_alpha = 0.9;
-      render_options.hierarchy_level = level;
-      render_options.out_stream_name = base::StringPrintf("RenderStream%d", idx);
-      out_render.emplace_back(new seg::SegmentationRenderUnit(render_options));
-      out_render.back()->AttachTo(input);
+	if (render_and_save) {
+		vector<float> out_levels{ 0.1f, 0.4f, 0.75f };
+		int idx = 0;
+		for (float level : out_levels) {
+			seg::SegmentationRenderUnitOptions render_options;
+			render_options.blend_alpha = 0.9;
+			render_options.hierarchy_level = level;
+			render_options.out_stream_name = base::StringPrintf("RenderStream%d", idx);
+			out_render.emplace_back(new seg::SegmentationRenderUnit(render_options));
+			out_render.back()->AttachTo(input);
 
-      vf::VideoWriterOptions writer_options;
-      writer_options.stream_name = render_options.out_stream_name;
-      writer_options.bit_rate = 40000000;
-      writer_options.fraction = 16;
-      std::string out_file = base::StringPrintf("%s_render_%0.2f.mp4",
-                                                input_path.c_str(), level);
-      out_writer.emplace_back(new vf::VideoWriterUnit(writer_options, out_file));
-      out_writer.back()->AttachTo(out_render.back().get());
+			SelectedVideoWriterOptions writer_options;
+			writer_options.stream_name = render_options.out_stream_name;
+			writer_options.bit_rate = 40000000;
+			writer_options.fraction = 16;
+			std::string out_file = base::StringPrintf("%s_render_%0.2f.mp4",
+				input_path.c_str(), level);
+			out_writer.emplace_back(new SelectedVideoWriterUnit(writer_options, out_file));
+			out_writer.back()->AttachTo(out_render.back().get());
 
-      input = out_writer.back().get();
-      ++idx;
-    }
-  }
+			input = out_writer.back().get();
+			++idx;
+		}
+	}
 
-  std::unique_ptr<seg::SegmentationWriterUnit> seg_writer;
-  if (write_to_file) {
-    //std::string out_file = FLAGS_input_file + ".pb";
-    LOG(INFO) << "Writing result to file " << output_path;
-    seg::SegmentationWriterUnitOptions writer_options;
-    writer_options.filename = output_path;
-    writer_options.remove_rasterization = true;
-    seg_writer.reset(new seg::SegmentationWriterUnit(writer_options));
-    seg_writer->AttachTo(input);
-    input = seg_writer.get();
-  }
+	std::unique_ptr<seg::SegmentationWriterUnit> seg_writer;
+	if (write_to_file) {
+		//std::string out_file = FLAGS_input_file + ".pb";
+		LOG(INFO) << "Writing result to file " << output_path;
+		seg::SegmentationWriterUnitOptions writer_options;
+		writer_options.filename = output_path;
+		writer_options.remove_rasterization = true;
+		seg_writer.reset(new seg::SegmentationWriterUnit(writer_options));
+		seg_writer->AttachTo(input);
+		input = seg_writer.get();
+	}
 
-  std::unique_ptr<vf::VideoPipelineStats> pipeline_stat;
-  std::unique_ptr<DisplayUnit> pipeline_stat_display;
-  if (use_pipeline && pipeline_status) {
-    pipeline_stat.reset(new vf::VideoPipelineStats(vf::VideoPipelineStatsOptions(),
-                                                   named_sinks));
-    sources.back()->SetIdleUnit(pipeline_stat.get());
+	std::unique_ptr<vf::VideoPipelineStats> pipeline_stat;
+	std::unique_ptr<DisplayUnit> pipeline_stat_display;
+	if (use_pipeline && pipeline_status) {
+		pipeline_stat.reset(new vf::VideoPipelineStats(vf::VideoPipelineStatsOptions(),
+			named_sinks));
+		sources.back()->SetIdleUnit(pipeline_stat.get());
 
-    DisplayUnitOptions display_options;
-    display_options.stream_name = "VideoPipelineStats";
-    pipeline_stat_display.reset(new DisplayUnit(display_options));
-    pipeline_stat_display->AttachTo(pipeline_stat.get());
-  }
+		DisplayUnitOptions display_options;
+		display_options.stream_name = "VideoPipelineStats";
+		pipeline_stat_display.reset(new DisplayUnit(display_options));
+		pipeline_stat_display->AttachTo(pipeline_stat.get());
+	}
 
-  LOG(INFO) << "Tree layout:";
-  root->PrintTree();
+	LOG(INFO) << "Tree layout:";
+	root->PrintTree();
 
-  if (!use_pipeline) {
-    if (!root->PrepareProcessing()) {
-      LOG(ERROR) << "Setup failed.";
-    }
-    root->Run();
-  } else {
-    if (!root->PrepareProcessing()) {
-      LOG(ERROR) << "Setup failed.";
-    }
-    vf::VideoPipelineInvoker invoker;
-    vf::RatePolicy pipeline_policy;
+	if (!use_pipeline) {
+		if (!root->PrepareProcessing()) {
+			LOG(ERROR) << "Setup failed.";
+		}
+		root->Run();
+	}
+	else {
+		if (!root->PrepareProcessing()) {
+			LOG(ERROR) << "Setup failed.";
+		}
+		vf::VideoPipelineInvoker invoker;
+		vf::RatePolicy pipeline_policy;
 
-    // Setup rate policy with 20 fps max processing, startup of 2 frames (flow uses two),
-    // and dynamic updates to pipeline every 30 frames.
-    const bool use_camera = input_path == "CAMERA";
-    pipeline_policy.max_rate = 20;
-    pipeline_policy.dynamic_rate = true;
-    pipeline_policy.startup_frames = 10;
-    pipeline_policy.update_interval = 1;
-    pipeline_policy.queue_throttle_threshold = use_camera ? 3 : 10;
-    // Guarantee that buffers never go empty in non-camera mode.
-    pipeline_policy.dynamic_rate_scale = use_camera ? 0.9 : 1.1;
+		// Setup rate policy with 20 fps max processing, startup of 2 frames (flow uses two),
+		// and dynamic updates to pipeline every 30 frames.
+		const bool use_camera = input_path == "CAMERA";
+		pipeline_policy.max_rate = 20;
+		pipeline_policy.dynamic_rate = true;
+		pipeline_policy.startup_frames = 10;
+		pipeline_policy.update_interval = 1;
+		pipeline_policy.queue_throttle_threshold = use_camera ? 3 : 10;
+		// Guarantee that buffers never go empty in non-camera mode.
+		pipeline_policy.dynamic_rate_scale = use_camera ? 0.9 : 1.1;
 
-    // Start the threads.
-    // First source is run rate limited.
-    invoker.RunRootRateLimited(pipeline_policy, root);
+		// Start the threads.
+		// First source is run rate limited.
+		invoker.RunRootRateLimited(pipeline_policy, root);
 
-    // Run last source in main thread.
-    for (int k = 0; k < sources.size() - 1; ++k) {
-      invoker.RunPipelineSource(sources[k].get());
-    }
+		// Run last source in main thread.
+		for (int k = 0; k < sources.size() - 1; ++k) {
+			invoker.RunPipelineSource(sources[k].get());
+		}
 
-    sources.back()->Run();
+		sources.back()->Run();
 
-    invoker.WaitUntilPipelineFinished();
-  }
+		invoker.WaitUntilPipelineFinished();
+	}
 
-  LOG(INFO) << "__SEGMENTATION_FINISHED__";
-  return 0;
+	LOG(INFO) << "__SEGMENTATION_FINISHED__";
+	return 0;
 }
