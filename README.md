@@ -77,3 +77,14 @@ Use "add_pascal_voc_db.m" to add additional images and segmentations to the data
 ## Bibliography
 [1] Yuval Nirkin, Iacopo Masi, Anh Tuan Tran, Tal Hassner, Gerard Medioni, [On Face Segmentation, Face Swapping, and Face Perception](https://arxiv.org/pdf/1704.06729.pdf), arXiv preprint.  
 [2] Grundmann, Matthias and Kwatra, Vivek and Han, Mei and Essa, Irfan, [Efficient hierarchical graph-based video segmentation](https://smartech.gatech.edu/bitstream/handle/1853/38305/cvpr2010_videosegmentation.pdf), In Computer Vision and Pattern Recognition (CVPR), 2010 IEEE Conference on, pp. 2141-2148. IEEE, 2010.
+
+## Related projects
+- [End-to-end, automatic face swapping pipeline](https://github.com/YuvalNirkin/face_swap), example application using out face segmentation method.
+- [Deep face segmentation](https://github.com/YuvalNirkin/face_segmentation), used to segment face regions in the face swapping pipeline.
+- [CNN3DMM](http://www.openu.ac.il/home/hassner/projects/CNN3DMM/), used to estimate 3D face shapes from single images.
+- [ResFace101](http://www.openu.ac.il/home/hassner/projects/augmented_faces/), deep face recognition used in the paper to test face swapping capabilities. 
+
+## Copyright
+Copyright 2017, Yuval Nirkin, Iacopo Masi, Anh Tuan Tran, Tal Hassner, and Gerard Medioni 
+
+The SOFTWARE provided in this page is provided "as is", without any guarantee made as to its suitability or fitness for any particular use. It may contain bugs, so use of this tool is at your own risk. We take no responsibility for any damage of any sort that may unintentionally be caused through its use.
