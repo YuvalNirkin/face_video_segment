@@ -8,7 +8,7 @@ Snapshot from the Face Video Segmentation Editor.
 This project contains a collection of tools for semi-supervised gathering of ground truth face segmentation data from videos. A stable hierarchy of regions with temporal coherence is computed from dense optical flow using the method of [2]. Facial landmarks, extended to also include the forehead, are then used to extract the face contour. Regions are classified as belonging to the face segment according to their overlap with the face contour. The regions can then be further processed using a simple interface which allows browsing the entire video and manually classifying the regions using simple mouse clicks.
 
 
-If you find this code useful, please make sure to cite our paper in your work:
+If you find this code useful, please make sure to cite our paper in your work [1]:
 
 Yuval Nirkin, Iacopo Masi, Anh Tuan Tran, Tal Hassner, Gerard Medioni, "[On Face Segmentation, Face Swapping, and Face Perception](https://arxiv.org/abs/1704.06729)", arXiv preprint arXiv:1704.06729, 22 Apr 2017
 
