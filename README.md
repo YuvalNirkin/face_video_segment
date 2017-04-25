@@ -1,12 +1,18 @@
 # Face Video Segmentation - Face segmentation ground truth from videos
-Created by Yuval Nirkin.
+![alt text](https://yuvalnirkin.github.io/face_video_segment/images/snapshot.jpg "Snapshot")  
+Snapshot from the Face Video Segmentation Editor.
 
-[nirkin.com](http://www.nirkin.com/)
+[Yuval Nirkin](http://www.nirkin.com/), [Iacopo Masi](http://www-bcf.usc.edu/~iacopoma/), [Anh Tuan Tran](https://sites.google.com/site/anhttranusc/), [Tal Hassner](http://www.openu.ac.il/home/hassner/), and [Gerard Medioni](http://iris.usc.edu/people/medioni/index.html).
 
 ## Overview
 This project contains a collection of tools for semi-supervised gathering of ground truth face segmentation data from videos. A stable hierarchy of regions with temporal coherence is computed using dense optical flow. Facial landmarks, extended to also include the forehead, are then used to extract the face contour. Regions are classified for participating in the segmentation according to their overlap with the face contour. The regions can then be further processes using a simple interface which allows browsing the entire video, and manually classify the regions using simple mouse clicks.
 
-![alt text](https://yuvalnirkin.github.io/face_video_segment/images/snapshot.jpg "Snapshot")
+
+If you find this code useful, please make sure to cite our paper in your work:
+
+Yuval Nirkin, Iacopo Masi, Anh Tuan Tran, Tal Hassner, Gerard Medioni, "[On Face Segmentation, Face Swapping, and Face Perception](https://arxiv.org/pdf/1704.06729.pdf)", arXiv preprint.
+
+Please see [project page](http://www.openu.ac.il/home/hassner/projects/faceswap/) for more details, more resources and updates on this project.
 
 ## Dependencies
 | Library                                                            | Minimum Version | Notes                                    |
@@ -69,4 +75,5 @@ produce_pascal_voc_db('fvs_expr/output', 'fvs_expr/pascal_voc_db');
 Use "add_pascal_voc_db.m" to add additional images and segmentations to the dataset.
 
 ## Bibliography
-[1] Grundmann, Matthias and Kwatra, Vivek and Han, Mei and Essa, Irfan, [Efficient hierarchical graph-based video segmentation](https://smartech.gatech.edu/bitstream/handle/1853/38305/cvpr2010_videosegmentation.pdf), In Computer Vision and Pattern Recognition (CVPR), 2010 IEEE Conference on, pp. 2141-2148. IEEE, 2010.
+[1] Yuval Nirkin, Iacopo Masi, Anh Tuan Tran, Tal Hassner, Gerard Medioni, [On Face Segmentation, Face Swapping, and Face Perception](https://arxiv.org/pdf/1704.06729.pdf), arXiv preprint.  
+[2] Grundmann, Matthias and Kwatra, Vivek and Han, Mei and Essa, Irfan, [Efficient hierarchical graph-based video segmentation](https://smartech.gatech.edu/bitstream/handle/1853/38305/cvpr2010_videosegmentation.pdf), In Computer Vision and Pattern Recognition (CVPR), 2010 IEEE Conference on, pp. 2141-2148. IEEE, 2010.
