@@ -1,5 +1,5 @@
 # Face Video Segmentation - Face segmentation ground truth from videos
-![alt text](https://yuvalnirkin.github.io/face_video_segment/images/snapshot.jpg "Snapshot")  
+![alt text](https://yuvalnirkin.github.io/assets/img/projects/face_video_segment/thumb.jpg "Snapshot")  
 Snapshot from the Face Video Segmentation Editor.
 
 [Yuval Nirkin](http://www.nirkin.com/), [Iacopo Masi](http://www-bcf.usc.edu/~iacopoma/), [Anh Tuan Tran](https://sites.google.com/site/anhttranusc/), [Tal Hassner](http://www.openu.ac.il/home/hassner/), and [Gerard Medioni](http://iris.usc.edu/people/medioni/index.html).
@@ -31,7 +31,7 @@ Please see [project page](http://www.openu.ac.il/home/hassner/projects/faceswap/
 - Download the [landmarks model file](http://dlib.net/files/shape_predictor_68_face_landmarks.dat.bz2).
 
 ## Usage
-For using the library's C++ interface, please take a look at the [Doxygen generated documentation](https://yuvalnirkin.github.io/face_video_segment/).
+For using the library's C++ interface, please take a look at the [Doxygen generated documentation](https://yuvalnirkin.github.io/projects/face_video_segment/).
 
 Before running the pipeline please prepare an input directory with all the face videos for processing, and an output directory that will contain all the experiment data.
 To execute the entire automatic pipeline use the following Matlab code:
