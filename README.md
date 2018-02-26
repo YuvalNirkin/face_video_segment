@@ -74,8 +74,21 @@ produce_pascal_voc_db('fvs_expr/output', 'fvs_expr/pascal_voc_db');
 ```
 Use "add_pascal_voc_db.m" to add additional images and segmentations to the dataset.
 
+## Citation
+
+Please cite our paper with the following bibtex if you use our tool:
+
+``` latex
+@inproceedings{nirkin2018_faceswap,
+      title={On Face Segmentation, Face Swapping, and Face Perception},
+      booktitle = {IEEE Conference on Automatic Face and Gesture Recognition},
+      author={Nirkin, Yuval and Masi, Iacopo and Tran, Anh Tuan and Hassner, Tal and Medioni, and G\'{e}rard Medioni},
+      year={2018},
+    }
+```
+
 ## Bibliography
-[1] Yuval Nirkin, Iacopo Masi, Anh Tuan Tran, Tal Hassner, Gerard Medioni, [On Face Segmentation, Face Swapping, and Face Perception](https://arxiv.org/pdf/1704.06729.pdf), arXiv preprint arXiv:1704.06729, 22 Apr 2017.  
+[1] Yuval Nirkin, Iacopo Masi, Anh Tuan Tran, Tal Hassner, Gerard Medioni, [On Face Segmentation, Face Swapping, and Face Perception](https://arxiv.org/pdf/1704.06729.pdf), IEEE Conference on Automatic Face and Gesture Recognition, 2018.  
 [2] Grundmann, Matthias and Kwatra, Vivek and Han, Mei and Essa, Irfan, [Efficient hierarchical graph-based video segmentation](https://smartech.gatech.edu/bitstream/handle/1853/38305/cvpr2010_videosegmentation.pdf), In Computer Vision and Pattern Recognition (CVPR), 2010 IEEE Conference on, pp. 2141-2148. IEEE, 2010.
 
 ## Related projects
